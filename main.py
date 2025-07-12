@@ -1,13 +1,10 @@
-import requests
-
-def ask_ollama(prompt: str, model: str = "gemma3:4b") -> str:
-    response = requests.post("http://localhost:11434/api/generate", json={
-        "model": model,
-        "prompt": prompt,
-        "stream": False
-    })
-    return response.json()["response"]
+from core.OllamaLLM import OllamaLLM
 
 if __name__ == "__main__":
-    reply = ask_ollama("¿Cómo se dice 'apple' en español?")
+    
+    llm = OllamaLLM(model_name="gemma3:4b")
+
+    reply = llm.ask("¿Cómo se dice 'apple' en español?")
+    print("Gemma says:", reply)
+    reply = llm.ask("How to say 'house' in spanish?")
     print("Gemma says:", reply)
