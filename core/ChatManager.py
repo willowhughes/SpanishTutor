@@ -1,6 +1,6 @@
 from core.MemoryState import MemoryState
 
-class ChatManager():
+class ChatManager:
 
     def __init__(self, llm, config):
         self.llm = llm

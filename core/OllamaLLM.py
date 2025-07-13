@@ -1,5 +1,6 @@
 from core.LLMInterface import LLMInterface
 import requests
+from core.Utils import Utils
 
 class OllamaLLM(LLMInterface):
 
@@ -16,5 +17,5 @@ class OllamaLLM(LLMInterface):
             "stream": False
         })
         response.raise_for_status()  # raise HTTPError for bad responses (4xx or 5xx)
-        return response.json()["response"]
+        return Utils.clean_text(response.json()["response"])
     
