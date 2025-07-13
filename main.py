@@ -1,6 +1,6 @@
-from core.OllamaLLM import OllamaLLM
-from core.ChatManager import ChatManager
-from core.Utils import Utils
+from src.OllamaLLM import OllamaLLM
+from src.ChatManager import ChatManager
+from src.Utils import Utils
 
 if __name__ == "__main__":
     

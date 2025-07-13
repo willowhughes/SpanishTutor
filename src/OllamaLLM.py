@@ -1,6 +1,6 @@
-from core.LLMInterface import LLMInterface
+from src.LLMInterface import LLMInterface
 import requests
-from core.Utils import Utils
+from src.Utils import Utils
 
 class OllamaLLM(LLMInterface):
 

@@ -1,4 +1,8 @@
-from core.MemoryState import MemoryState
+import os
+import subprocess
+from src.MemoryState import MemoryState
+from src.Utils import Utils
+from src.TTS import TTS
 
 class ChatManager:
 
@@ -10,7 +14,7 @@ class ChatManager:
         memory = MemoryState(self.config["system_prompt"])
 
         while True:
-            prompt = self.get_input()
+            prompt = self.get_text_input()
             
             # handle commands
             cmd = self.handle_commands(prompt)
@@ -30,8 +34,10 @@ class ChatManager:
             # prompt_tokens = len(llm.tokenize(formatted_prompt.encode("utf-8", errors="ignore")))
             
             response = self.llm.ask(formatted_prompt)
-            
-            print(f"\n{self.config['llm_name']}: {response}\n")
+            self.print_text_output(response)
+            if "voice_model" in self.config:
+                TTS.play_tts(self.config["voice_model"], response)
+
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
             memory.add_exchange(prompt, response)
         pass
@@ -45,7 +51,7 @@ class ChatManager:
             return "/help"
         return prompt
     
-    def get_input(self):
+    def get_text_input(self):
         """input with copy-paste support"""
         try:
             prompt = input("You: ")
@@ -70,3 +76,10 @@ class ChatManager:
             
         except EOFError:
             return "exit"
+        
+    def print_text_output(self, response: str):
+        print(f"\n{self.config['llm_name']}: {response}\n")
+
+    
+
+
