@@ -1,5 +1,6 @@
 import os
 import subprocess
+import torch
 from src.Utils import Utils
 from TTS.api import TTS
 
@@ -7,6 +8,7 @@ class TTSManager:
     def __init__(self, model_name="tts_models/multilingual/multi-dataset/xtts_v2"):
         """Initialize Coqui TTS with Spanish model"""
         try:
+
             self.tts = TTS(model_name=model_name, gpu=False)
 
         except Exception as e:
@@ -16,7 +18,7 @@ class TTSManager:
     def stream_tts(self):
         pass
 
-    def play_tts(self, text: str, output_file="output.wav"):  # Removed @staticmethod and fixed self
+    def play_tts(self, text: str, output_file="output.wav"):
         """Generate and play TTS using Coqui TTS"""
         if not self.tts:
             print("TTS not initialized")
