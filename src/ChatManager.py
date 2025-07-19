@@ -2,7 +2,7 @@ import os
 import subprocess
 from src.MemoryState import MemoryState
 from src.Utils import Utils
-from src.TTSManager import TTSManager
+# from src.TTSManager import TTSManager
 
 class ChatManager:
 
@@ -13,11 +13,11 @@ class ChatManager:
 
     def run_chat(self):
         memory = MemoryState(self.config["system_prompt"])
-        try:
+        '''try:
             self.tts = TTSManager(self.config["voice_model"])
         except Exception as e:
             print(f"TTS initialization failed: {e}")
-            self.tts = None
+            self.tts = None'''
 
 
         while True:
@@ -43,8 +43,8 @@ class ChatManager:
             response = self.llm.ask(formatted_prompt)
             self.print_text_output(response)
 
-            if "voice_model" in self.config:
-                self.tts.play_tts(response)
+            '''if "voice_model" in self.config:
+                self.tts.play_tts(response)'''
 
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
             memory.add_exchange(prompt, response)
