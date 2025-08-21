@@ -56,8 +56,7 @@ class Utils:
         default_config = {
             "model_name": "gemma3:4b",
             "system_prompt": "",
-            "llm_name": "LLM",
-            "voice_model": "es_MX-claude-high.onnx"
+            "llm_name": "LLM"
         }
         
         try:
@@ -72,11 +71,3 @@ class Utils:
         except json.JSONDecodeError:
             print(f"Invalid JSON in '{config_path}'. Using default settings.")
             return default_config
-        
-    @staticmethod
-    def get_model_path(model_name: str) -> str:
-        """Get the full path to a model file"""
-        current_dir = os.path.dirname(__file__)  # core directory
-        parent_dir = os.path.dirname(current_dir)  # project root
-        model_path = os.path.join(parent_dir, "models", model_name)
-        return model_path

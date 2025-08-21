@@ -2,7 +2,7 @@ import os
 import subprocess
 from src.MemoryState import MemoryState
 from src.Utils import Utils
-from src.TTSManagerAPI import TTSManagerAPI
+from TTSManager import TTSManagerAPI
 
 class ChatManager:
 

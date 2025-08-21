@@ -1,4 +1,4 @@
-from src.APILLM import APILLM
+from LLM import APILLM
 from src.ChatManager import ChatManager
 from src.Utils import Utils
 from dotenv import load_dotenv

@@ -1,40 +1,114 @@
-import os
-import subprocess
-import torch
-from src.Utils import Utils
-from TTS.api import TTS
+import google.auth.credentials
+from google.cloud import texttospeech
+
+import json
+import google.auth
+from google.oauth2 import service_account
+import google.auth.transport.requests
+import requests
+import base64
 
 class TTSManager:
-    def __init__(self, model_name="tts_models/multilingual/multi-dataset/xtts_v2"):
-        """Initialize Coqui TTS with Spanish model"""
-        try:
 
-            self.tts = TTS(model_name=model_name, gpu=False)
+    def __init__(self, google_credentials_path: str = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"):
+        self.google_credentials_path = google_credentials_path
+        credentials = service_account.Credentials.from_service_account_file(
+            google_credentials_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+        self.access_token = credentials.token
+        self.url = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
-        except Exception as e:
-            print(f"Failed to initialize TTS: {e}")
-            self.tts = None
+    def synthesize_speech(self, text):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}",
+            # If you want to set your Google Cloud project explicitly (optional):
+            # "X-Goog-User-Project": "your-project-id"
+        }
 
-    def stream_tts(self):
-        pass
+        body = {
+            "input": {
+                "markup": text
+            },
+            "voice": {
+                "languageCode": "es-US",
+                "name": "es-US-Chirp3-HD-Achernar",
+                "voiceClone": {}
+            },
+            "audioConfig": {
+                "audioEncoding": "LINEAR16"
+            }
+        }
 
-    def play_tts(self, text: str, output_file="output.wav"):
-        """Generate and play TTS using Coqui TTS"""
-        if not self.tts:
-            print("TTS not initialized")
-            return
-            
-        try:
-            # Generate audio
-            self.tts.tts_to_file(text=text, file_path=output_file)
-            
-            # Play the audio file (Windows)
-            if os.name == 'nt':  # Windows
-                os.system(f'start {output_file}')
-            else:  # Linux/Mac
-                os.system(f'aplay {output_file}')  # or 'afplay' on Mac
-                
-            print(f"Audio saved as: {output_file}")
-            
-        except Exception as e:
-            print(f"TTS Error: {e}")
+        response = requests.post(self.url, headers=headers, json=body)
+        response.raise_for_status()
+        response_data = response.json()
+
+        audio_content = response_data.get("audioContent")
+        if audio_content:
+            audio_bytes = base64.b64decode(audio_content)
+            with open("output.wav", "wb") as audio_file:
+                audio_file.write(audio_bytes)
+            print("Audio saved as output.wav")
+        else:
+            print("No audio content found in response.")
+
+
+'''# Path to your service account JSON key file
+SERVICE_ACCOUNT_FILE = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"
+
+# Define the scopes needed for Text-to-Speech API
+SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
+
+def get_access_token():
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    auth_req = google.auth.transport.requests.Request()
+    credentials.refresh(auth_req)
+    return credentials.token
+
+def synthesize_speech(text):
+    access_token = get_access_token()
+
+    url = "https://texttospeech.googleapis.com/v1/text:synthesize"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {access_token}",
+        # If you want to set your Google Cloud project explicitly (optional):
+        # "X-Goog-User-Project": "your-project-id"
+    }
+
+    body = {
+        "input": {
+            "markup": text
+        },
+        "voice": {
+            "languageCode": "es-US",
+            "name": "es-US-Chirp3-HD-Achernar",
+            "voiceClone": {}
+        },
+        "audioConfig": {
+            "audioEncoding": "LINEAR16"
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=body)
+    response.raise_for_status()
+    response_data = response.json()
+
+    audio_content = response_data.get("audioContent")
+    if audio_content:
+        audio_bytes = base64.b64decode(audio_content)
+        with open("output.wav", "wb") as audio_file:
+            audio_file.write(audio_bytes)
+        print("Audio saved as output.wav")
+    else:
+        print("No audio content found in response.")
+
+if __name__ == "__main__":
+    text = "hola, welcome to our session today, cómo estás, how are you doing"
+    synthesize_speech(text)'''
