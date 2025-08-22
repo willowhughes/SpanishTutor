@@ -12,50 +12,47 @@ class ChatManager:
         self.config = config
         self.stt = stt
         self.tts = tts
+        self.commands = ["BREAK", "CONTINUE"]
+        self.memory = MemoryState(self.config["system_prompt"])
 
     def run_chat(self):
-        memory = MemoryState(self.config["system_prompt"])
 
         while True:
-            if self.stt:
-                prompt = self.stt.transcribe_audio("Recording.m4a")
-            else:
-                prompt = self.get_text_input()
-            print(f"\nUser: {prompt}\n")
+            prompt = self.get_text_input()
 
             # handle commands
-            cmd = self.handle_commands(prompt)
-            if cmd == "/quit":
+            loop_logic = self.handle_commands(prompt)
+            if loop_logic == self.commands[0]:
                 break
-            elif cmd == "/clear":
-                memory = MemoryState(system_prompt=self.config["system_prompt"])
-                print("Conversation cleared.\n")
+            elif loop_logic == self.commands[1]:
                 continue
-            elif cmd in ["/help"]:
-                continue
-                
+
             if not prompt.strip():
                 continue
             
-            formatted_prompt = memory.build_prompt(prompt)
+            formatted_prompt = self.memory.build_prompt(prompt)
             # prompt_tokens = len(llm.tokenize(formatted_prompt.encode("utf-8", errors="ignore")))
             
             response = self.llm.ask(formatted_prompt)
             print(f"\n{self.config['llm_name']}: {response}\n")
 
             self.tts.synthesize_speech(response)
+            self.tts.play_audio()
 
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
-            memory.add_exchange(prompt, response)
+            self.memory.add_exchange(prompt, response)
         pass
 
     def handle_commands(self, prompt: str):
         """handle special commands"""
-        if prompt.lower() == "/clear":
-            return "/clear"
+        if prompt.lower() == "/quit":
+            return self.commands[0]
+        elif prompt.lower() == "/clear":
+            self.memory.clear_memory()
+            return self.commands[1]
         elif prompt.lower() == "/help":
             print("Todo help cmd")
-            return "/help"
+            return self.commands[1]
         return prompt
     
     def get_text_input(self):
@@ -83,6 +80,11 @@ class ChatManager:
             
         except EOFError:
             return "exit"
+        
+    def get_voice_input(self):
+        prompt = self.stt.transcribe_audio("audio/input/Recording.m4a")
+        print(f"\nYou: {prompt}\n")
+        return prompt
 
     
 

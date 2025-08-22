@@ -26,3 +26,6 @@ class MemoryState:
             prompt += f"<start_of_turn>user\n{new_msg}<end_of_turn>\n<start_of_turn>model\n"
         
         return prompt
+
+    def clear_memory(self):
+        self.history = []

@@ -7,6 +7,10 @@ import google.auth.transport.requests
 import requests
 import base64
 from src.TTSInterface import TTSInterface
+import sounddevice as sd
+import soundfile as sf
+import threading
+import time
 
 class TTSManager(TTSInterface):
 
@@ -49,66 +53,24 @@ class TTSManager(TTSInterface):
         audio_content = response_data.get("audioContent")
         if audio_content:
             audio_bytes = base64.b64decode(audio_content)
-            with open("output.wav", "wb") as audio_file:
+            with open("audio/output/output.wav", "wb") as audio_file:
                 audio_file.write(audio_bytes)
-            print("Audio saved as output.wav")
+            print("Audio saved as audio/output/output.wav")
         else:
             print("No audio content found in response.")
 
-
-'''# Path to your service account JSON key file
-SERVICE_ACCOUNT_FILE = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"
-
-# Define the scopes needed for Text-to-Speech API
-SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
-
-def get_access_token():
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
-    auth_req = google.auth.transport.requests.Request()
-    credentials.refresh(auth_req)
-    return credentials.token
-
-def synthesize_speech(text):
-    access_token = get_access_token()
-
-    url = "https://texttospeech.googleapis.com/v1/text:synthesize"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}",
-        # If you want to set your Google Cloud project explicitly (optional):
-        # "X-Goog-User-Project": "your-project-id"
-    }
-
-    body = {
-        "input": {
-            "markup": text
-        },
-        "voice": {
-            "languageCode": "es-US",
-            "name": "es-US-Chirp3-HD-Achernar",
-            "voiceClone": {}
-        },
-        "audioConfig": {
-            "audioEncoding": "LINEAR16"
-        }
-    }
-
-    response = requests.post(url, headers=headers, json=body)
-    response.raise_for_status()
-    response_data = response.json()
-
-    audio_content = response_data.get("audioContent")
-    if audio_content:
-        audio_bytes = base64.b64decode(audio_content)
-        with open("output.wav", "wb") as audio_file:
-            audio_file.write(audio_bytes)
-        print("Audio saved as output.wav")
-    else:
-        print("No audio content found in response.")
-
-if __name__ == "__main__":
-    text = "hola, welcome to our session today, cómo estás, how are you doing"
-    synthesize_speech(text)'''
+    def play_audio(self, file_path="audio/output/output.wav"):
+        def _play_audio_thread():
+            try:
+                # Load audio
+                data, samplerate = sf.read(file_path, dtype='float32')
+                
+                # Play using sounddevice (non-blocking)
+                sd.play(data, samplerate)
+                
+            except Exception as e:
+                print(f"Error playing audio: {e}")
+        
+        # Run audio playback in separate thread so it doesn't block
+        audio_thread = threading.Thread(target=_play_audio_thread, daemon=True)
+        audio_thread.start()
