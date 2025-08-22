@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from src.STTManager import STTManager
 from src.MemoryState import MemoryState
 from src.Utils import Utils
@@ -18,7 +19,7 @@ class ChatManager:
     def run_chat(self):
 
         while True:
-            prompt = self.get_text_input()
+            prompt = self.get_voice_input()
 
             # handle commands
             loop_logic = self.handle_commands(prompt)
@@ -82,9 +83,16 @@ class ChatManager:
             return "exit"
         
     def get_voice_input(self):
-        prompt = self.stt.transcribe_audio("audio/input/Recording.m4a")
-        print(f"\nYou: {prompt}\n")
-        return prompt
+        while self.tts.is_playing:
+            time.sleep(0.1)
+        audio_file = self.stt.record_audio(duration=8)
+        
+        if audio_file:
+            prompt = self.stt.transcribe_audio(audio_file)
+            print(f"\nYou: {prompt}\n")
+            return prompt
+        else:
+            return "Recording failed"
 
     
 

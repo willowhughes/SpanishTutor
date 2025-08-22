@@ -23,13 +23,16 @@ class TTSManager(TTSInterface):
         credentials.refresh(auth_req)
         self.access_token = credentials.token
         self.url = "https://texttospeech.googleapis.com/v1/text:synthesize"
+        self.is_playing = False  # Track playback status
 
     def synthesize_speech(self, text):
+        # Wait for previous audio to finish before overwriting
+        while self.is_playing:
+            time.sleep(0.1)
+            
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.access_token}",
-            # If you want to set your Google Cloud project explicitly (optional):
-            # "X-Goog-User-Project": "your-project-id"
         }
 
         body = {
@@ -62,15 +65,21 @@ class TTSManager(TTSInterface):
     def play_audio(self, file_path="audio/output/output.wav"):
         def _play_audio_thread():
             try:
+                self.is_playing = True
+                
                 # Load audio
                 data, samplerate = sf.read(file_path, dtype='float32')
                 
-                # Play using sounddevice (non-blocking)
+                # Play using sounddevice
                 sd.play(data, samplerate)
+                sd.wait()  # Wait for playback to complete
+                
+                self.is_playing = False
                 
             except Exception as e:
                 print(f"Error playing audio: {e}")
+                self.is_playing = False
         
-        # Run audio playback in separate thread so it doesn't block
+        # Run audio playback in separate thread
         audio_thread = threading.Thread(target=_play_audio_thread, daemon=True)
         audio_thread.start()
