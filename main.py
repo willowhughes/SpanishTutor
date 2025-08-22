@@ -1,4 +1,6 @@
-from LLM import APILLM
+from src.LLMManager import LLMManager
+from src.STTManager import STTManager
+from src.TTSManager import TTSManager
 from src.ChatManager import ChatManager
 from src.Utils import Utils
 from dotenv import load_dotenv
@@ -8,7 +10,10 @@ if __name__ == "__main__":
 
     load_dotenv()
     config = Utils.load_config()
-    llm = APILLM(model_name=config["model_name"], api_key=os.environ.get("GROQ_API_KEY"))
 
-    chat = ChatManager(llm, config)
+    stt = STTManager(api_key=os.environ.get("GROQ_API_KEY"), model_name=config.get("stt_model_name", "whisper-large-v3-turbo"))
+    llm = LLMManager(model_name=config["llm_model_name"], api_key=os.environ.get("GROQ_API_KEY"))
+    tts = TTSManager(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
+
+    chat = ChatManager(llm=llm, stt=stt, tts=tts, config=config)
     chat.run_chat()

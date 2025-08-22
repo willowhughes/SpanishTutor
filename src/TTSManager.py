@@ -1,14 +1,14 @@
 import google.auth.credentials
 from google.cloud import texttospeech
-
 import json
 import google.auth
 from google.oauth2 import service_account
 import google.auth.transport.requests
 import requests
 import base64
+from src.TTSInterface import TTSInterface
 
-class TTSManager:
+class TTSManager(TTSInterface):
 
     def __init__(self, google_credentials_path: str = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"):
         self.google_credentials_path = google_credentials_path

@@ -1,28 +1,28 @@
 import os
 import subprocess
+from src.STTManager import STTManager
 from src.MemoryState import MemoryState
 from src.Utils import Utils
-from TTSManager import TTSManagerAPI
+from src.TTSManager import TTSManager
 
 class ChatManager:
 
-    def __init__(self, llm, config):
+    def __init__(self, llm = None, stt = None, tts = None, config = None):
         self.llm = llm
         self.config = config
-        self.tts = None
+        self.stt = stt
+        self.tts = tts
 
     def run_chat(self):
         memory = MemoryState(self.config["system_prompt"])
-        try:
-            self.tts = TTSManagerAPI()
-        except Exception as e:
-            print(f"TTS initialization failed: {e}")
-            self.tts = None
-
 
         while True:
-            prompt = self.get_text_input()
-            
+            if self.stt:
+                prompt = self.stt.transcribe_audio("Recording.m4a")
+            else:
+                prompt = self.get_text_input()
+            print(f"\nUser: {prompt}\n")
+
             # handle commands
             cmd = self.handle_commands(prompt)
             if cmd == "/quit":
@@ -41,7 +41,7 @@ class ChatManager:
             # prompt_tokens = len(llm.tokenize(formatted_prompt.encode("utf-8", errors="ignore")))
             
             response = self.llm.ask(formatted_prompt)
-            self.print_text_output(response)
+            print(f"\n{self.config['llm_name']}: {response}\n")
 
             self.tts.synthesize_speech(response)
 
@@ -83,9 +83,6 @@ class ChatManager:
             
         except EOFError:
             return "exit"
-        
-    def print_text_output(self, response: str):
-        print(f"\n{self.config['llm_name']}: {response}\n")
 
     
 

@@ -3,7 +3,7 @@ from src.Utils import Utils
 import os
 from groq import Groq
 
-class LLM(LLMInterface):
+class LLMManager(LLMInterface):
 
     def __init__(self, model_name: str = "llama-3.3-70b-versatile", api_key: str = None):
         self.model_name = model_name
