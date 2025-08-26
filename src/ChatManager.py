@@ -19,6 +19,8 @@ class ChatManager:
     def run_chat(self):
 
         while True:
+            start_time = time.time()
+
             prompt = self.get_voice_input()
 
             # handle commands
@@ -42,6 +44,9 @@ class ChatManager:
 
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
             self.memory.add_exchange(prompt, response)
+
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"Chat exchange took {elapsed_ms:.1f}ms")
         pass
 
     def handle_commands(self, prompt: str):

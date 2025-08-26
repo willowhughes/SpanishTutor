@@ -1,7 +1,5 @@
 from src.STTInterface import STTInterface
 from groq import Groq
-import os
-import subprocess
 import sounddevice as sd
 import soundfile as sf
 import time
@@ -15,11 +13,8 @@ class STTManager(STTInterface):
         self.model_name = model_name
 
     def record_audio(self, duration=5, sample_rate=44100):
-        """Simple audio recording prototype"""
-        print(f"🎤 Recording for {duration} seconds... Speak now!")
+        print(f"Recording for {duration} seconds... Speak now!")
         
-        # Ensure directory exists
-        os.makedirs("audio/input", exist_ok=True)
         
         try:
             # Record audio
@@ -29,29 +24,43 @@ class STTManager(STTInterface):
                               dtype='float64')
             sd.wait()  # Wait until recording is finished
             
-            # Save as WAV (Groq/Whisper works well with WAV)
             output_path = "audio/input/Recording.wav"
             sf.write(output_path, audio_data, sample_rate)
             
-            print("✅ Recording complete!")
+            print("Recording complete!")
             return output_path
             
         except Exception as e:
-            print(f"❌ Recording failed: {e}")
+            print(f"Recording failed: {e}")
             return None
 
     def transcribe_audio(self, audio_file_path: str) -> str:
         try:
+            start_time = time.time()
+            
             with open(audio_file_path, "rb") as file:
                 transcription = self.client.audio.transcriptions.create(
                     file=(audio_file_path, file.read()),
                     model=self.model_name,
                     response_format="verbose_json",
                 )
-                return transcription.text
+
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"STT took {elapsed_ms:.1f}ms")
+
+            if transcription.language != "Spanish" and transcription.language != "English":
+                print(f"detected {transcription.language} defaulting to Spanish")
+                with open(audio_file_path, "rb") as file:
+                    transcription = self.client.audio.transcriptions.create(
+                        file=(audio_file_path, file.read()),
+                        model=self.model_name,
+                        language="es",
+                        response_format="verbose_json",
+                    )
+            return transcription.text
         except Exception as e:
             print(f"Error during transcription: {e}")
             return None
-        
-    
+
+
 

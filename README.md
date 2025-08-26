@@ -4,3 +4,7 @@ reqs
 - pip install -r requirements.txt
     - addtional reqs:
     - C++ build tools 
+
+
+TODO:
+- improve latency
