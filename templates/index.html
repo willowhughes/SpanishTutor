@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spanish Tutor</title>
+</head>
+<body>
+    <h1>Spanish Tutor</h1>
+    <div id="chat"></div>
+    <input type="text" id="input" placeholder="Type message...">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const message = input.value;
+            
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message})
+            });
+            
+            const data = await response.json();
+            document.getElementById('chat').innerHTML += `<p>${data.response}</p>`;
+            input.value = '';
+        }
+    </script>
+</body>
+</html>

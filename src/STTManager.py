@@ -5,12 +5,13 @@ import soundfile as sf
 import time
 
 class STTManager(STTInterface):
-    def __init__(self, api_key: str = None, model_name: str = "whisper-large-v3-turbo"):
+    def __init__(self, api_key: str = None, model_name: str = "whisper-large-v3-turbo", output_audio_path = "audio/output/Recording.wav"):
         self.api_key = api_key
         if not self.api_key:
             raise ValueError("Groq API key is required. Set GROQ_API_KEY in .env or pass as argument.")
         self.client = Groq(api_key=self.api_key)
         self.model_name = model_name
+        self.output_audio_path = output_audio_path
 
     def record_audio(self, duration=5, sample_rate=44100):
         print(f"Recording for {duration} seconds... Speak now!")
@@ -23,13 +24,11 @@ class STTManager(STTInterface):
                               channels=1, 
                               dtype='float64')
             sd.wait()  # Wait until recording is finished
-            
-            output_path = "audio/input/Recording.wav"
-            sf.write(output_path, audio_data, sample_rate)
-            
+            sf.write(self.output_audio_path, audio_data, sample_rate)
+
             print("Recording complete!")
-            return output_path
-            
+            return self.output_audio_path
+
         except Exception as e:
             print(f"Recording failed: {e}")
             return None
