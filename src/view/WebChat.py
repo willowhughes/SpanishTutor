@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import os
 
-class WebApp:
+class WebChat:
     def __init__(self, chat_manager):
         # Tell Flask where to find templates (go up one level from src/)
         template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))

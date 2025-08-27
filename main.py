@@ -1,7 +1,7 @@
 from src.LLMManager import LLMManager
 from src.STTManager import STTManager
 from src.TTSManager import TTSManager
-from src.ChatManager import ChatManager
+from src.core.ConversationService import ConversationService
 from src.Translator import Translator
 from src.Utils import Utils
 from dotenv import load_dotenv
@@ -16,5 +16,5 @@ if __name__ == "__main__":
     tts = TTSManager(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
     translator = Translator(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
 
-    chat = ChatManager(llm=llm, stt=stt, tts=tts, translator=translator, config=config)
-    chat.run_chat()
+    conversation = ConversationService(llm=llm, stt=stt, tts=tts, translator=translator, config=config)
+    conversation.run_chat()

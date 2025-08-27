@@ -2,11 +2,11 @@ import os
 import subprocess
 import time
 from src.STTManager import STTManager
-from src.MemoryState import MemoryState
+from src.core.MemoryState import MemoryState
 from src.Utils import Utils
 from src.TTSManager import TTSManager
 
-class ChatManager:
+class ConversationService:
 
     def __init__(self, llm = None, stt = None, tts = None, translator = None, config = None):
         self.llm = llm
