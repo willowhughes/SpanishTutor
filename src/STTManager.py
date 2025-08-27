@@ -36,7 +36,6 @@ class STTManager(STTInterface):
 
     def transcribe_audio(self, audio_file_path: str) -> str:
         try:
-            start_time = time.time()
             
             with open(audio_file_path, "rb") as file:
                 transcription = self.client.audio.transcriptions.create(
@@ -44,9 +43,6 @@ class STTManager(STTInterface):
                     model=self.model_name,
                     response_format="verbose_json",
                 )
-
-            elapsed_ms = (time.time() - start_time) * 1000
-            print(f"STT took {elapsed_ms:.1f}ms")
 
             if transcription.language != "Spanish" and transcription.language != "English":
                 print(f"detected {transcription.language} defaulting to Spanish")

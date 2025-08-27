@@ -49,14 +49,9 @@ class TTSManager(TTSInterface):
             }
         }
 
-        start_time = time.time()
-
         response = requests.post(self.url, headers=headers, json=body)
         response.raise_for_status()
         response_data = response.json()
-
-        elapsed_ms = (time.time() - start_time) * 1000
-        print(f"TTS took {elapsed_ms:.1f}ms")
 
         audio_content = response_data.get("audioContent")
         if audio_content:

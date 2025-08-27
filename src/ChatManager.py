@@ -8,18 +8,19 @@ from src.TTSManager import TTSManager
 
 class ChatManager:
 
-    def __init__(self, llm = None, stt = None, tts = None, config = None):
+    def __init__(self, llm = None, stt = None, tts = None, translator = None, config = None):
         self.llm = llm
         self.config = config
         self.stt = stt
         self.tts = tts
+        self.translator = translator
         self.commands = ["BREAK", "CONTINUE"]
         self.memory = MemoryState(self.config["system_prompt"])
 
     def run_chat(self):
 
         while True:
-            start_time = time.time()
+            total_time = time.time()
 
             prompt = self.get_voice_input()
 
@@ -36,16 +37,28 @@ class ChatManager:
             formatted_prompt = self.memory.build_prompt(prompt)
             # prompt_tokens = len(llm.tokenize(formatted_prompt.encode("utf-8", errors="ignore")))
             
+            start_time = time.time()
             response = self.llm.ask(formatted_prompt)
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"LLM took {elapsed_ms:.1f}ms")
             print(f"\n{self.config['llm_name']}: {response}\n")
 
+            start_time = time.time()
+            word_translations = self.translator.word_by_word_es_to_en(response)
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"Word-by-word translations took {elapsed_ms:.1f}ms")
+            print(f"Word-by-word translations: {word_translations}")
+
+            start_time = time.time()
             self.tts.synthesize_speech(response)
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"Text-to-Speech took {elapsed_ms:.1f}ms")
             self.tts.play_audio()
 
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
             self.memory.add_exchange(prompt, response)
 
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.time() - total_time) * 1000
             print(f"Chat exchange took {elapsed_ms:.1f}ms")
         pass
 
@@ -93,7 +106,10 @@ class ChatManager:
         audio_file = self.stt.record_audio(duration=8)
         
         if audio_file:
+            start_time = time.time()
             prompt = self.stt.transcribe_audio(audio_file)
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"Speech-to-Text took {elapsed_ms:.1f}ms")
             print(f"\nYou: {prompt}\n")
             return prompt
         else:
