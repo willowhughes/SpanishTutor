@@ -1,4 +1,4 @@
-from view.WebChat import WebApp
+from src.view.WebApp import WebApp
 from src.LLMManager import LLMManager
 from src.STTManager import STTManager
 from src.TTSManager import TTSManager
@@ -17,7 +17,7 @@ def main():
     translator = Translator(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
     conversation = ConversationService(llm=llm, stt=stt, tts=tts, translator=translator, config=config)
 
-    web_app = WebApp(chat_manager=conversation)
+    web_app = WebApp(conversation=conversation)
     print("Starting server at http://127.0.0.1:5000")
     web_app.run()
 

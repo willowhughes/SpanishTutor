@@ -20,7 +20,6 @@ class ConversationService:
     def run_chat(self):
 
         while True:
-            total_time = time.time()
 
             prompt = self.get_voice_input()
 
@@ -37,6 +36,7 @@ class ConversationService:
             formatted_prompt = self.memory.build_prompt(prompt)
             # prompt_tokens = len(llm.tokenize(formatted_prompt.encode("utf-8", errors="ignore")))
             
+            response_time = time.time()
             start_time = time.time()
             response = self.llm.ask(formatted_prompt)
             elapsed_ms = (time.time() - start_time) * 1000
@@ -58,8 +58,8 @@ class ConversationService:
             # print(f"({prompt_tokens}/{config['context_window']} tokens used)")
             self.memory.add_exchange(prompt, response)
 
-            elapsed_ms = (time.time() - total_time) * 1000
-            print(f"Chat exchange took {elapsed_ms:.1f}ms")
+            elapsed_ms = (time.time() - response_time) * 1000
+            print(f"Response took {elapsed_ms:.1f}ms")
         pass
 
     def handle_commands(self, prompt: str):
