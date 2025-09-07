@@ -1,4 +1,4 @@
-from src.view.WebApp import WebApp
+from src.flask.WebApp import WebApp
 from src.LLMManager import LLMManager
 from src.STTManager import STTManager
 from src.TTSManager import TTSManager

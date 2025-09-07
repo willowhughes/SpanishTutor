@@ -38,6 +38,7 @@ class WebApp:
                     audio_file.save(temp_file_path)
                 
                 # Transcribe the audio (file is now closed)
+                response_time = time.time()
                 start_time = time.time()
                 user_message = self.conversation.stt.transcribe_audio(temp_file_path)
                 elapsed_ms = (time.time() - start_time) * 1000
@@ -48,7 +49,10 @@ class WebApp:
                 
                 # Process the message
                 response = self.process_message(user_message)
-                
+
+                elapsed_ms = (time.time() - response_time) * 1000
+                print(f"Response took {elapsed_ms:.1f}ms")
+
                 return jsonify({
                     'user_message': user_message,
                     'response': response
@@ -64,10 +68,30 @@ class WebApp:
                         os.unlink(temp_file_path)
                     except Exception as cleanup_error:
                         print(f"Warning: Could not delete temp file {temp_file_path}: {cleanup_error}")
-    
+        
+        # Streaming STT endpoint
+        @self.app.route('/stream/stt')
+        def stream_stt():
+            # Real-time transcription
+            pass
+
+        # Streaming LLM endpoint  
+        @self.app.route('/stream/llm')
+        def stream_llm():
+            # Sentence-by-sentence generation
+            pass
+
+        # Streaming TTS endpoint
+        @self.app.route('/stream/tts')
+        def stream_tts():
+            # Audio chunk streaming
+            pass
+
     def process_message(self, user_input):
         """Process a message through the conversation service"""
         try:
+            response_time = time.time()
+
             # Handle commands
             command_result = self.conversation.handle_commands(user_input)
             if command_result in self.conversation.commands:
@@ -87,19 +111,19 @@ class WebApp:
             
             # Get word translations
             start_time = time.time()
-            word_translations = self.conversation.translator.word_by_word_es_to_en(response)
+            translation = self.conversation.translator.translate_text(response)
             elapsed_ms = (time.time() - start_time) * 1000
-            print(f"Word-by-word translations took {elapsed_ms:.1f}ms")
-            print(f"Word-by-word translations: {word_translations}")
-            
+            print(f"Translation took {elapsed_ms:.1f}ms")
+            print(f"Translation: {translation}")
+
             # Add to memory
             self.conversation.memory.add_exchange(user_input, response)
-            
+
             return response
             
         except Exception as e:
             print(f"Error processing message: {e}")
             return "Sorry, I encountered an error processing your message."
-    
+
     def run(self, debug=True):
         self.app.run(debug=debug)
