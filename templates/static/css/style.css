@@ -20,8 +20,13 @@ body {
 }
 
 .ai { 
-    color: green; 
+    color: rgb(73, 148, 62); 
 }
+
+.translation {
+    color: rgb(117, 59, 135)
+}
+
 
 .controls { 
     display: flex; 

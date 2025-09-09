@@ -1,6 +1,7 @@
 from google.cloud import translate_v2 as translate
 import os
 from google.oauth2 import service_account
+import html
 
 class Translator:
     def __init__(self, google_credentials_path: str = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"):
@@ -12,13 +13,22 @@ class Translator:
         )
         self.translate_client = translate.Client(credentials=credentials)
 
-    def translate_text(self, text, target_language="en"):
+    def translate_text(self, text, source_language="es", target_language="en"):
         """
         Translate full text from Spanish to English (or vice versa)
         """
         try:
-            result = self.translate_client.translate(text, target_language=target_language)
-            return result["translatedText"]
+            result = self.translate_client.translate(
+                text, 
+                source_language=source_language,
+                target_language=target_language
+            )
+            translated = result["translatedText"]
+            
+            # Decode HTML entities (&#39; -> ', &quot; -> ", etc.)
+            decoded = html.unescape(translated)
+            return decoded
+            
         except Exception as e:
             print(f"Translation error: {e}")
             return text

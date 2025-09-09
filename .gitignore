@@ -1,0 +1,14 @@
+# Environment variables
+.env
+
+# Virtual environment
+venv/
+
+# Python cache files
+__pycache__/
+
+# Google credentials
+google_credentials.json
+
+# Audio files
+audio/

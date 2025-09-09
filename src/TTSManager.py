@@ -53,16 +53,16 @@ class TTSManager(TTSInterface):
         response.raise_for_status()
         response_data = response.json()
 
-        audio_content = response_data.get("audioContent")
-        if audio_content:
-            audio_bytes = base64.b64decode(audio_content)
-            with open("audio/output/output.wav", "wb") as audio_file:
-                audio_file.write(audio_bytes)
-            print("Audio saved as audio/output/output.wav")
-        else:
-            print("No audio content found in response.")
+        audio_base64 = response_data.get("audioContent")
+        # self.save_audio(audio_bytes)
+        return audio_base64
 
-    def play_audio(self, file_path="audio/output/output.wav"):
+    def save_audio(self, audio_base64, file_path="audio/output/output.wav"):
+        audio_bytes = base64.b64decode(audio_base64)
+        with open(file_path, "wb") as audio_file:
+            audio_file.write(audio_bytes)
+
+    def play_audio_locally(self, file_path="audio/output/output.wav"):
         def _play_audio_thread():
             try:
                 self.is_playing = True

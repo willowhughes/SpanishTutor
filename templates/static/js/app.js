@@ -96,8 +96,14 @@ async function sendAudioMessage(audioBlob) {
         if (data.response) {
             addMessage(`AI: ${data.response}`, 'ai');
         }
+        if (data.translation) {
+            addMessage(`Translation: ${data.translation}`, 'translation');
+        }
         if (data.error) {
             addMessage(`Error: ${data.error}`, 'ai');
+        }
+        if (data.audio) {
+            playAudioResponse(data.audio);
         }
         
     } catch (error) {
@@ -138,6 +144,33 @@ function addMessage(message, type) {
     messageDiv.textContent = message;
     chatDiv.appendChild(messageDiv);
     chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+function playAudioResponse(audioBase64) {
+    try {
+        // Convert base64 to binary
+        const binaryString = atob(audioBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Create audio blob
+        const audioBlob = new Blob([bytes], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create and play audio
+        const audio = new Audio(audioUrl);
+        audio.play();
+        
+        // Clean up URL when done
+        audio.addEventListener('ended', () => {
+            URL.revokeObjectURL(audioUrl);
+        });
+        
+    } catch (error) {
+        console.error('Error playing audio:', error);
+    }
 }
 
 // Initialize when page loads

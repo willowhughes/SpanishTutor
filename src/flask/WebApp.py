@@ -5,10 +5,15 @@ import time
 
 class WebApp:
     def __init__(self, conversation):
-        # Tell Flask where to find templates (go up one level from src/)
+        # Tell Flask where to find templates and static files
         current_dir = os.path.dirname(__file__)
         template_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates'))
-        self.app = Flask(__name__, template_folder=template_dir)
+        static_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates', 'static'))
+        
+        self.app = Flask(__name__, 
+                         template_folder=template_dir,
+                         static_folder=static_dir,
+                         static_url_path='/static')
         self.conversation = conversation
         self.setup_routes()
     
@@ -47,15 +52,21 @@ class WebApp:
                 if not user_message:
                     return jsonify({'error': 'Could not transcribe audio'})
                 
-                # Process the message
-                response = self.process_message(user_message)
+                response, translation = self.process_message(user_message)
+
+                start_time = time.time()
+                audio_base64 = self.conversation.tts.synthesize_speech(response)
+                elapsed_ms = (time.time() - start_time) * 1000
+                print(f"Text-to-Speech took {elapsed_ms:.1f}ms")
 
                 elapsed_ms = (time.time() - response_time) * 1000
                 print(f"Response took {elapsed_ms:.1f}ms")
 
                 return jsonify({
                     'user_message': user_message,
-                    'response': response
+                    'response': response,
+                    'translation': translation,
+                    'audio': audio_base64
                 })
                     
             except Exception as e:
@@ -90,8 +101,6 @@ class WebApp:
     def process_message(self, user_input):
         """Process a message through the conversation service"""
         try:
-            response_time = time.time()
-
             # Handle commands
             command_result = self.conversation.handle_commands(user_input)
             if command_result in self.conversation.commands:
@@ -119,7 +128,7 @@ class WebApp:
             # Add to memory
             self.conversation.memory.add_exchange(user_input, response)
 
-            return response
+            return response, translation
             
         except Exception as e:
             print(f"Error processing message: {e}")
