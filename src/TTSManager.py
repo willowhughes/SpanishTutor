@@ -56,6 +56,26 @@ class TTSManager(TTSInterface):
         audio_base64 = response_data.get("audioContent")
         # self.save_audio(audio_bytes)
         return audio_base64
+    
+    def get_audio_duration(self, audio_base64):
+        """Get duration of base64 encoded audio"""
+        try:
+            import io
+            
+            # Decode base64 to bytes
+            audio_bytes = base64.b64decode(audio_base64)
+            
+            # Create a BytesIO object to read from memory
+            audio_buffer = io.BytesIO(audio_bytes)
+            
+            # Use soundfile to get duration
+            with sf.SoundFile(audio_buffer) as f:
+                duration = len(f) / f.samplerate
+                
+            return duration
+        except Exception as e:
+            print(f"Error getting audio duration: {e}")
+            return 0.0
 
     def save_audio(self, audio_base64, file_path="audio/output/output.wav"):
         audio_bytes = base64.b64decode(audio_base64)

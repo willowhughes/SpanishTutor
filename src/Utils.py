@@ -75,7 +75,7 @@ class Utils:
             return default_config
 
     @staticmethod
-    def log_latency(stt_ms, llm_ms, translation_ms, tts_ms, filepath="tests/latency_log.csv"):
+    def log_latency(stt_ms, llm_ms, translation_ms, tts_ms, input_duration_sec, output_duration_sec, response_ms, filepath="tests/latency_log.csv"):
         """Log pipeline latency to CSV, creating file with headers if it doesn't exist"""
         file_exists = os.path.exists(filepath)
 
@@ -84,15 +84,15 @@ class Utils:
             
             # Write headers if file is new
             if not file_exists:
-                writer.writerow(['timestamp', 'stt_ms', 'llm_ms', 'translation_ms', 'tts_ms', 'total_ms'])
-            
-            # Write data
-            total_ms = stt_ms + llm_ms + translation_ms + tts_ms
+                writer.writerow(['timestamp', 'stt_ms', 'llm_ms', 'translation_ms', 'tts_ms', 'input_duration_sec', 'output_duration_sec', 'response_ms'])
+
             writer.writerow([
                 datetime.now().isoformat(),
                 round(stt_ms, 1),
                 round(llm_ms, 1), 
                 round(translation_ms, 1),
                 round(tts_ms, 1),
-                round(total_ms, 1)
+                round(input_duration_sec, 1),
+                round(output_duration_sec, 1),
+                round(response_ms, 1)
             ])

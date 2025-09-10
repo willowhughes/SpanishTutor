@@ -59,14 +59,24 @@ class WebApp:
                 audio_base64 = self.conversation.tts.synthesize_speech(response)
                 tts_ms = (time.time() - start_time) * 1000
 
+                output_duration_sec = self.conversation.tts.get_audio_duration(audio_base64)
+
                 response_ms = (time.time() - response_time) * 1000
 
-                Utils.log_latency(stt_ms, llm_ms, translate_ms, tts_ms)
-                print(f"Speech-to-Text took {stt_ms:.1f}ms")
-                print(f"LLM took {llm_ms:.1f}ms")
-                print(f"Translation took {translate_ms:.1f}ms")
-                print(f"Text-to-Speech took {tts_ms:.1f}ms")
-                print(f"Response took {response_ms:.1f}ms")
+                input_duration_sec = float(request.form.get('input_duration', 0))
+
+                Utils.log_latency(stt_ms=stt_ms, llm_ms=llm_ms, translation_ms=translate_ms, 
+                                  tts_ms=tts_ms, input_duration_sec=input_duration_sec, 
+                                  output_duration_sec=output_duration_sec, response_ms=response_ms)
+                print(
+                    f"Input duration: {input_duration_sec:.1f}s | "
+                    f"Output duration: {output_duration_sec:.1f}s | "
+                    f"Speech-to-Text took {stt_ms:.1f}ms | "
+                    f"LLM took {llm_ms:.1f}ms | "
+                    f"Translation took {translate_ms:.1f}ms | "
+                    f"Text-to-Speech took {tts_ms:.1f}ms | "
+                    f"Response took {response_ms:.1f}ms"
+                )
 
                 return jsonify({
                     'user_message': user_message,

@@ -76,8 +76,12 @@ function stopRecording() {
 }
 
 async function sendAudioMessage(audioBlob) {
+    // Get input audio duration from the blob
+    const inputDuration = await getAudioDuration(audioBlob);
+    
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('input_duration', inputDuration); // Send duration to backend
     
     try {
         recordBtn.className = 'disabled';
@@ -112,6 +116,22 @@ async function sendAudioMessage(audioBlob) {
     } finally {
         recordBtn.className = 'ready';
         recordBtn.textContent = '🎤 Record';
+    }
+}
+
+// get audio duration using Web Audio API
+async function getAudioDuration(audioBlob) {
+    try {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const duration = audioBuffer.duration;
+        audioContext.close();
+        return duration;
+    } catch (error) {
+        console.error('Error getting audio duration:', error);
+        // Fallback to 0 if we can't determine duration
+        return 0;
     }
 }
 
