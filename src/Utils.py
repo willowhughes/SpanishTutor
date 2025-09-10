@@ -1,6 +1,8 @@
 import re
 import json
 import os
+import csv
+from datetime import datetime
 
 class Utils:
 
@@ -71,3 +73,26 @@ class Utils:
         except json.JSONDecodeError:
             print(f"Invalid JSON in '{config_path}'. Using default settings.")
             return default_config
+
+    @staticmethod
+    def log_latency(stt_ms, llm_ms, translation_ms, tts_ms, filepath="tests/latency_log.csv"):
+        """Log pipeline latency to CSV, creating file with headers if it doesn't exist"""
+        file_exists = os.path.exists(filepath)
+
+        with open(filepath, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Write headers if file is new
+            if not file_exists:
+                writer.writerow(['timestamp', 'stt_ms', 'llm_ms', 'translation_ms', 'tts_ms', 'total_ms'])
+            
+            # Write data
+            total_ms = stt_ms + llm_ms + translation_ms + tts_ms
+            writer.writerow([
+                datetime.now().isoformat(),
+                round(stt_ms, 1),
+                round(llm_ms, 1), 
+                round(translation_ms, 1),
+                round(tts_ms, 1),
+                round(total_ms, 1)
+            ])

@@ -1,4 +1,4 @@
-class MemoryState:
+class MemoryState: # TODO: This could definitely be optimized
 
     def __init__(self, system_prompt="", max_exchanges=32):
         self.system_prompt = system_prompt

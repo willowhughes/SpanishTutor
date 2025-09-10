@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import os
 import tempfile
 import time
+from src.Utils import Utils
 
 class WebApp:
     def __init__(self, conversation):
@@ -25,9 +26,10 @@ class WebApp:
         @self.app.route('/chat', methods=['POST'])
         def chat():
             user_input = request.json.get('message', '')
-            response = self.process_message(user_input)
-            return jsonify({'response': response})
-        
+            response, translation = self.process_message(user_input)
+            audio_base64 = self.conversation.tts.synthesize_speech(response)
+            return jsonify({'response': response, 'translation': translation, 'audio': audio_base64})
+
         @self.app.route('/chat/audio', methods=['POST'])
         def chat_audio():
             temp_file_path = None
@@ -46,21 +48,25 @@ class WebApp:
                 response_time = time.time()
                 start_time = time.time()
                 user_message = self.conversation.stt.transcribe_audio(temp_file_path)
-                elapsed_ms = (time.time() - start_time) * 1000
-                print(f"Speech-to-Text took {elapsed_ms:.1f}ms")
-                
+                stt_ms = (time.time() - start_time) * 1000
+
                 if not user_message:
                     return jsonify({'error': 'Could not transcribe audio'})
                 
-                response, translation = self.process_message(user_message)
+                response, translation, llm_ms, translate_ms = self.process_message(user_message)
 
                 start_time = time.time()
                 audio_base64 = self.conversation.tts.synthesize_speech(response)
-                elapsed_ms = (time.time() - start_time) * 1000
-                print(f"Text-to-Speech took {elapsed_ms:.1f}ms")
+                tts_ms = (time.time() - start_time) * 1000
 
-                elapsed_ms = (time.time() - response_time) * 1000
-                print(f"Response took {elapsed_ms:.1f}ms")
+                response_ms = (time.time() - response_time) * 1000
+
+                Utils.log_latency(stt_ms, llm_ms, translate_ms, tts_ms)
+                print(f"Speech-to-Text took {stt_ms:.1f}ms")
+                print(f"LLM took {llm_ms:.1f}ms")
+                print(f"Translation took {translate_ms:.1f}ms")
+                print(f"Text-to-Speech took {tts_ms:.1f}ms")
+                print(f"Response took {response_ms:.1f}ms")
 
                 return jsonify({
                     'user_message': user_message,
@@ -115,20 +121,18 @@ class WebApp:
             # Get LLM response
             start_time = time.time()
             response = self.conversation.llm.ask(formatted_prompt)
-            elapsed_ms = (time.time() - start_time) * 1000
-            print(f"LLM took {elapsed_ms:.1f}ms")
-            
+            llm_ms = (time.time() - start_time) * 1000
+
             # Get word translations
             start_time = time.time()
             translation = self.conversation.translator.translate_text(response)
-            elapsed_ms = (time.time() - start_time) * 1000
-            print(f"Translation took {elapsed_ms:.1f}ms")
+            translate_ms = (time.time() - start_time) * 1000
             print(f"Translation: {translation}")
 
             # Add to memory
             self.conversation.memory.add_exchange(user_input, response)
 
-            return response, translation
+            return response, translation, llm_ms, translate_ms
             
         except Exception as e:
             print(f"Error processing message: {e}")

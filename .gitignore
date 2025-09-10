@@ -12,3 +12,6 @@ google_credentials.json
 
 # Audio files
 audio/
+
+# Testing files
+tests/
