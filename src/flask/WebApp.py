@@ -7,11 +7,10 @@ from src.Utils import Utils
 
 class WebApp:
     def __init__(self, conversation):
-        # Tell Flask where to find templates and static files
+        # tell Flask where to find templates and static files
         current_dir = os.path.dirname(__file__)
         template_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates'))
         static_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates', 'static'))
-        
         self.app = Flask(__name__, 
                          template_folder=template_dir,
                          static_folder=static_dir,
@@ -26,8 +25,27 @@ class WebApp:
         
         @self.app.route('/chat', methods=['POST'])
         def chat():
-            user_input = request.json.get('message', '')
-            response, translation, llm_ms, translate_ms = self.process_message(user_input)
+            user_message = request.json.get('message', '')
+            try:
+                if not user_message.strip():
+                    return "Please say something", "", 0, 0
+                
+                formatted_prompt = self.conversation.memory.build_prompt(user_message)
+
+                start_time = time.time()
+                response = self.conversation.llm.ask(formatted_prompt)
+                llm_ms = (time.time() - start_time) * 1000
+
+                start_time = time.time()
+                translation = self.conversation.translator.translate_text(response)
+                translate_ms = (time.time() - start_time) * 1000
+                print(f"Translation: {translation}")
+
+                self.conversation.memory.add_exchange(user_message, response)
+                
+            except Exception as e:
+                print(f"Error processing message: {e}")
+                return "Sorry, I encountered an error processing your message.", "", 0, 0
             audio_base64 = self.conversation.tts.synthesize_speech(response)
             return jsonify({'response': response, 'translation': translation, 'audio': audio_base64})
 
@@ -54,7 +72,26 @@ class WebApp:
                 if not user_message:
                     return jsonify({'error': 'Could not transcribe audio'})
                 
-                response, translation, llm_ms, translate_ms = self.process_message(user_message)
+                try:
+                    if not user_message.strip():
+                        return "Please say something", "", 0, 0
+                    
+                    formatted_prompt = self.conversation.memory.build_prompt(user_message)
+
+                    start_time = time.time()
+                    response = self.conversation.llm.ask(formatted_prompt)
+                    llm_ms = (time.time() - start_time) * 1000
+
+                    start_time = time.time()
+                    translation = self.conversation.translator.translate_text(response)
+                    translate_ms = (time.time() - start_time) * 1000
+                    print(f"Translation: {translation}")
+
+                    self.conversation.memory.add_exchange(user_message, response)
+                    
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    return "Sorry, I encountered an error processing your message.", "", 0, 0
 
                 start_time = time.time()
                 audio_base64 = self.conversation.tts.synthesize_speech(response)
@@ -112,29 +149,65 @@ class WebApp:
                     temp_file_path = temp_file.name
                     audio_file.save(temp_file_path)
                 
-                # Process STT and LLM first
+                response_time = time.time()
+                start_time = time.time()
                 user_message = self.conversation.stt.transcribe_audio(temp_file_path)
+                stt_ms = (time.time() - start_time) * 1000
                 if not user_message:
                     return jsonify({'error': 'Could not transcribe audio'})
-                
-                response, translation, llm_ms, translate_ms = self.process_message(user_message)
+
+                try:
+                    if not user_message.strip():
+                        return "Please say something", "", 0, 0
+                    
+                    formatted_prompt = self.conversation.memory.build_prompt(user_message)
+
+                    start_time = time.time()
+                    response = self.conversation.llm.ask(formatted_prompt)
+                    llm_ms = (time.time() - start_time) * 1000
+
+                    start_time = time.time()
+                    translation = self.conversation.translator.translate_text(response)
+                    translate_ms = (time.time() - start_time) * 1000
+                    print(f"Translation: {translation}")
+
+                    self.conversation.memory.add_exchange(user_message, response)
+                    
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    return "Sorry, I encountered an error processing your message.", "", 0, 0
+
+
+                input_duration_sec = float(request.form.get('input_duration', 0))
                 
                 # Return streaming response
                 def generate():
                     # Send initial data
                     yield f"data: {json.dumps({'type': 'text', 'user_message': user_message, 'response': response, 'translation': translation})}\n\n"
                     
-                    # Stream real-time audio chunks from Google
-                    try:
+                    try:  # Stream real-time audio chunks from Google
                         for audio_chunk in self.conversation.tts.synthesize_speech_streaming(response):
                             yield f"data: {json.dumps({'type': 'audio_chunk', 'chunk': audio_chunk})}\n\n"
-                    except AttributeError:
-                        # Fallback if streaming not available
+                    except AttributeError: # Fallback if streaming not available
                         audio_base64 = self.conversation.tts.synthesize_speech(response)
                         yield f"data: {json.dumps({'type': 'audio_chunk', 'chunk': audio_base64})}\n\n"
                     
                     # Signal end
                     yield f"data: {json.dumps({'type': 'audio_end'})}\n\n"
+
+
+                tts_ms = 100.0 # estimate for now
+                response_ms = ((time.time() - response_time) * 1000) + tts_ms
+                output_duration_sec = 0 # todo
+                print(
+                    f"Input duration: {input_duration_sec:.1f}s | "
+                    f"Output duration: {output_duration_sec:.1f}s | "
+                    f"Speech-to-Text took {stt_ms:.1f}ms | "
+                    f"LLM took {llm_ms:.1f}ms | "
+                    f"Translation took {translate_ms:.1f}ms | "
+                    f"Text-to-Speech took {tts_ms:.1f}ms | "
+                    f"Response took {response_ms:.1f}ms"
+                )
                 
                 return Response(generate(), mimetype='text/plain', headers={
                     'Cache-Control': 'no-cache',
@@ -151,58 +224,6 @@ class WebApp:
                         os.unlink(temp_file_path)
                     except Exception as cleanup_error:
                         print(f"Warning: Could not delete temp file {temp_file_path}: {cleanup_error}")
-
-        # Streaming STT endpoint
-        @self.app.route('/stream/stt')
-        def stream_stt():
-            # Real-time transcription
-            pass
-
-        # Streaming LLM endpoint  
-        @self.app.route('/stream/llm')
-        def stream_llm():
-            # Sentence-by-sentence generation
-            pass
-
-        # Streaming TTS endpoint
-        @self.app.route('/stream/tts')
-        def stream_tts():
-            # Audio chunk streaming
-            pass
-
-    def process_message(self, user_input):
-        """Process a message through the conversation service"""
-        try:
-            # Handle commands
-            command_result = self.conversation.handle_commands(user_input)
-            if command_result in self.conversation.commands:
-                return "Command processed", "", 0, 0
-            
-            if not user_input.strip():
-                return "Please say something", "", 0, 0
-            
-            # Build prompt with memory
-            formatted_prompt = self.conversation.memory.build_prompt(user_input)
-            
-            # Get LLM response
-            start_time = time.time()
-            response = self.conversation.llm.ask(formatted_prompt)
-            llm_ms = (time.time() - start_time) * 1000
-
-            # Get word translations
-            start_time = time.time()
-            translation = self.conversation.translator.translate_text(response)
-            translate_ms = (time.time() - start_time) * 1000
-            print(f"Translation: {translation}")
-
-            # Add to memory
-            self.conversation.memory.add_exchange(user_input, response)
-
-            return response, translation, llm_ms, translate_ms
-            
-        except Exception as e:
-            print(f"Error processing message: {e}")
-            return "Sorry, I encountered an error processing your message.", "", 0, 0
 
     def run(self, debug=True):
         self.app.run(debug=debug)

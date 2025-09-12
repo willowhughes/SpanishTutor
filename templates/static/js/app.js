@@ -12,7 +12,7 @@ async function initializeAudio() {
     if (isInitialized) return;
     
     try {
-        recordBtn.textContent = '⏳ Requesting microphone...';
+        recordBtn.textContent = 'Requesting microphone...';
         recordBtn.className = 'disabled';
         
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -29,7 +29,7 @@ async function initializeAudio() {
         };
         
         isInitialized = true;
-        recordBtn.textContent = '🎤 Hold to Record';
+        recordBtn.textContent = 'Hold to Record';
         recordBtn.className = 'ready';
         
         // If button is still being pressed after initialization, start recording
@@ -40,7 +40,7 @@ async function initializeAudio() {
     } catch (error) {
         console.error('Error accessing microphone:', error);
         addMessage('Error: Could not access microphone', 'ai');
-        recordBtn.textContent = '❌ Microphone access denied';
+        recordBtn.textContent = 'Microphone access denied';
         recordBtn.className = 'disabled';
     }
 }
@@ -70,7 +70,7 @@ function stopRecording() {
 
     mediaRecorder.stop();
     isRecording = false;
-    recordBtn.textContent = '🎤 Hold to Record';
+    recordBtn.textContent = 'Hold to Record';
     recordBtn.className = 'ready';
     addMessage('Processing recording...', 'ai');
 }
@@ -85,7 +85,7 @@ async function sendAudioMessage(audioBlob) {
     
     try {
         recordBtn.className = 'disabled';
-        recordBtn.textContent = '⏳ Processing...';
+        recordBtn.textContent = 'Processing...';
         
         // Use streaming endpoint for real-time audio
         const response = await fetch('/chat/audio/stream', {
@@ -125,14 +125,14 @@ async function sendAudioMessage(audioBlob) {
                         } else if (data.type === 'audio_chunk') {
                             console.log(`Received audio chunk, size: ${data.chunk.length}`);
                             
-                            // Convert base64 to raw audio data
+                            // convert base64 to raw audio data
                             const binaryString = atob(data.chunk);
                             const bytes = new Uint8Array(binaryString.length);
                             for (let i = 0; i < binaryString.length; i++) {
                                 bytes[i] = binaryString.charCodeAt(i);
                             }
                             
-                            // Convert 16-bit PCM to Float32 for Web Audio API
+                            // convert 16-bit PCM to Float32 for Web Audio API
                             const pcmData = new Int16Array(bytes.buffer);
                             const floatData = new Float32Array(pcmData.length);
                             for (let i = 0; i < pcmData.length; i++) {
@@ -176,7 +176,7 @@ async function sendAudioMessage(audioBlob) {
         addMessage('Error sending audio message', 'ai');
     } finally {
         recordBtn.className = 'ready';
-        recordBtn.textContent = '🎤 Record';
+        recordBtn.textContent = 'Record';
     }
 }
 

@@ -23,7 +23,15 @@ class TTSManager(TTSInterface):
         credentials.refresh(auth_req)
         self.access_token = credentials.token
         self.url = "https://texttospeech.googleapis.com/v1/text:synthesize"
-        self.is_playing = False  # Track playback status
+        self.grpc_client = texttospeech.TextToSpeechClient(credentials=credentials)
+        self.voice = texttospeech.VoiceSelectionParams(
+            language_code="es-US",
+            name="es-US-Chirp3-HD-Achernar"
+        )
+        self.streaming_config = texttospeech.StreamingSynthesizeConfig( # Create streaming config
+            voice=self.voice
+        )
+        self.is_playing = False  # track playback status
 
     def synthesize_speech(self, text):
         # Wait for previous audio to finish before overwriting
@@ -54,7 +62,6 @@ class TTSManager(TTSInterface):
         response_data = response.json()
 
         audio_base64 = response_data.get("audioContent")
-        # self.save_audio(audio_bytes)
         return audio_base64
     
     def get_audio_duration(self, audio_base64):
@@ -79,47 +86,25 @@ class TTSManager(TTSInterface):
 
     def synthesize_speech_streaming(self, text):
         """Generator that yields real-time audio chunks from Google TTS streaming"""
-        try:
-            # Initialize gRPC client if not already done
-            if not hasattr(self, 'grpc_client'):
-                credentials = service_account.Credentials.from_service_account_file(
-                    self.google_credentials_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
-                )
-                self.grpc_client = texttospeech.TextToSpeechClient(credentials=credentials)
-            
-            # Create voice configuration
-            voice = texttospeech.VoiceSelectionParams(
-                language_code="es-US",
-                name="es-US-Chirp3-HD-Achernar"
-            )
-            
-            # Create streaming config
-            streaming_config = texttospeech.StreamingSynthesizeConfig(
-                voice=voice
-            )
-            
-            # Create requests iterator
-            def request_generator():
-                # First request with config
+        try:            
+            def request_generator(): # Create requests iterator
+                # first request with config
                 yield texttospeech.StreamingSynthesizeRequest(
-                    streaming_config=streaming_config
+                    streaming_config=self.streaming_config
                 )
-                # Second request with input
+                # second request with input
                 yield texttospeech.StreamingSynthesizeRequest(
                     input=texttospeech.StreamingSynthesisInput(text=text)
                 )
             
-            # Make the streaming call
             streaming_response = self.grpc_client.streaming_synthesize(request_generator())
             
-            # Yield audio chunks as they arrive
             chunk_count = 0
-            for response in streaming_response:
+            for response in streaming_response: # yield audio chunks as they arrive
                 if response.audio_content:
                     chunk_count += 1
                     print(f"Streaming TTS: Got chunk {chunk_count}, size: {len(response.audio_content)} bytes")
-                    # Convert to base64 for web transmission
-                    audio_base64 = base64.b64encode(response.audio_content).decode()
+                    audio_base64 = base64.b64encode(response.audio_content).decode()  # convert to base64 for web transmission
                     yield audio_base64
             
             print(f"Streaming TTS completed with {chunk_count} chunks")
