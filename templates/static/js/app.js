@@ -81,33 +81,94 @@ async function sendAudioMessage(audioBlob) {
     
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.wav');
-    formData.append('input_duration', inputDuration); // Send duration to backend
+    formData.append('input_duration', inputDuration);
     
     try {
         recordBtn.className = 'disabled';
         recordBtn.textContent = '⏳ Processing...';
         
-        const response = await fetch('/chat/audio', {
+        // Use streaming endpoint for real-time audio
+        const response = await fetch('/chat/audio/stream', {
             method: 'POST',
             body: formData
         });
         
-        const data = await response.json();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         
-        if (data.user_message) {
-            addMessage(`You: ${data.user_message}`, 'user');
-        }
-        if (data.response) {
-            addMessage(`AI: ${data.response}`, 'ai');
-        }
-        if (data.translation) {
-            addMessage(`Translation: ${data.translation}`, 'translation');
-        }
-        if (data.error) {
-            addMessage(`Error: ${data.error}`, 'ai');
-        }
-        if (data.audio) {
-            playAudioResponse(data.audio);
+        // Set up Web Audio API for real-time audio streaming
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const sampleRate = 24000; // Google TTS LINEAR16 sample rate
+        
+        let nextPlayTime = audioContext.currentTime;
+        let isFirstChunk = true;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.type === 'text') {
+                            // Display messages immediately
+                            addMessage(`You: ${data.user_message}`, 'user');
+                            addMessage(`AI: ${data.response}`, 'ai');
+                            if (data.translation) {
+                                addMessage(`Translation: ${data.translation}`, 'translation');
+                            }
+                        } else if (data.type === 'audio_chunk') {
+                            console.log(`Received audio chunk, size: ${data.chunk.length}`);
+                            
+                            // Convert base64 to raw audio data
+                            const binaryString = atob(data.chunk);
+                            const bytes = new Uint8Array(binaryString.length);
+                            for (let i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            
+                            // Convert 16-bit PCM to Float32 for Web Audio API
+                            const pcmData = new Int16Array(bytes.buffer);
+                            const floatData = new Float32Array(pcmData.length);
+                            for (let i = 0; i < pcmData.length; i++) {
+                                floatData[i] = pcmData[i] / 32768.0; // Convert to -1.0 to 1.0 range
+                            }
+                            
+                            // Schedule this chunk for immediate playback
+                            const audioBufferNode = audioContext.createBuffer(1, floatData.length, sampleRate);
+                            audioBufferNode.getChannelData(0).set(floatData);
+                            
+                            const source = audioContext.createBufferSource();
+                            source.buffer = audioBufferNode;
+                            source.connect(audioContext.destination);
+                            
+                            // Schedule playback for seamless streaming
+                            const startTime = Math.max(nextPlayTime, audioContext.currentTime + 0.01);
+                            source.start(startTime);
+                            
+                            // Update next play time
+                            nextPlayTime = startTime + audioBufferNode.duration;
+                            
+                            if (isFirstChunk) {
+                                console.log('Started real-time audio streaming!');
+                                isFirstChunk = false;
+                            }
+                            
+                        } else if (data.type === 'audio_end') {
+                            console.log('Audio streaming complete');
+                            // Close audio context after playback finishes
+                            setTimeout(() => audioContext.close(), (nextPlayTime - audioContext.currentTime + 1) * 1000);
+                        }
+                    } catch (parseError) {
+                        console.error('Error parsing SSE data:', parseError);
+                    }
+                }
+            }
         }
         
     } catch (error) {
@@ -116,6 +177,50 @@ async function sendAudioMessage(audioBlob) {
     } finally {
         recordBtn.className = 'ready';
         recordBtn.textContent = '🎤 Record';
+    }
+}
+
+async function playAudioChunkProgressive(audioChunkBase64, audioContext, scheduleTime) {
+    try {
+        // Convert base64 to array buffer
+        const binaryString = atob(audioChunkBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Decode audio data
+        const audioBuffer = await audioContext.decodeAudioData(bytes.buffer.slice());
+        
+        // Create audio source and schedule playback
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        
+        // Schedule to play at the right time for seamless playback
+        const playTime = Math.max(scheduleTime, audioContext.currentTime);
+        source.start(playTime);
+        
+        console.log(`Playing audio chunk at ${playTime.toFixed(2)}s`);
+        
+    } catch (error) {
+        console.error('Error playing audio chunk:', error);
+        // Fallback to simple audio element for this chunk
+        try {
+            const binaryString = atob(audioChunkBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            const audioBlob = new Blob([bytes], { type: 'audio/wav' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.play();
+            audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl));
+        } catch (fallbackError) {
+            console.error('Fallback audio playback also failed:', fallbackError);
+        }
     }
 }
 

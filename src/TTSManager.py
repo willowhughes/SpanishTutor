@@ -77,6 +77,61 @@ class TTSManager(TTSInterface):
             print(f"Error getting audio duration: {e}")
             return 0.0
 
+    def synthesize_speech_streaming(self, text):
+        """Generator that yields real-time audio chunks from Google TTS streaming"""
+        try:
+            # Initialize gRPC client if not already done
+            if not hasattr(self, 'grpc_client'):
+                credentials = service_account.Credentials.from_service_account_file(
+                    self.google_credentials_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                )
+                self.grpc_client = texttospeech.TextToSpeechClient(credentials=credentials)
+            
+            # Create voice configuration
+            voice = texttospeech.VoiceSelectionParams(
+                language_code="es-US",
+                name="es-US-Chirp3-HD-Achernar"
+            )
+            
+            # Create streaming config
+            streaming_config = texttospeech.StreamingSynthesizeConfig(
+                voice=voice
+            )
+            
+            # Create requests iterator
+            def request_generator():
+                # First request with config
+                yield texttospeech.StreamingSynthesizeRequest(
+                    streaming_config=streaming_config
+                )
+                # Second request with input
+                yield texttospeech.StreamingSynthesizeRequest(
+                    input=texttospeech.StreamingSynthesisInput(text=text)
+                )
+            
+            # Make the streaming call
+            streaming_response = self.grpc_client.streaming_synthesize(request_generator())
+            
+            # Yield audio chunks as they arrive
+            chunk_count = 0
+            for response in streaming_response:
+                if response.audio_content:
+                    chunk_count += 1
+                    print(f"Streaming TTS: Got chunk {chunk_count}, size: {len(response.audio_content)} bytes")
+                    # Convert to base64 for web transmission
+                    audio_base64 = base64.b64encode(response.audio_content).decode()
+                    yield audio_base64
+            
+            print(f"Streaming TTS completed with {chunk_count} chunks")
+                    
+        except Exception as e:
+            print(f"Error in streaming TTS: {e}")
+            print("Falling back to non-streaming TTS")
+            # Fallback to non-streaming
+            full_audio = self.synthesize_speech(text)
+            print(f"Fallback TTS generated audio of length: {len(full_audio) if full_audio else 0}")
+            yield full_audio
+
     def save_audio(self, audio_base64, file_path="audio/output/output.wav"):
         audio_bytes = base64.b64decode(audio_base64)
         with open(file_path, "wb") as audio_file:

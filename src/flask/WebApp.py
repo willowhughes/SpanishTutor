@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import os
 import tempfile
 import time
+import json
 from src.Utils import Utils
 
 class WebApp:
@@ -26,7 +27,7 @@ class WebApp:
         @self.app.route('/chat', methods=['POST'])
         def chat():
             user_input = request.json.get('message', '')
-            response, translation = self.process_message(user_input)
+            response, translation, llm_ms, translate_ms = self.process_message(user_input)
             audio_base64 = self.conversation.tts.synthesize_speech(response)
             return jsonify({'response': response, 'translation': translation, 'audio': audio_base64})
 
@@ -96,6 +97,61 @@ class WebApp:
                     except Exception as cleanup_error:
                         print(f"Warning: Could not delete temp file {temp_file_path}: {cleanup_error}")
         
+        # Streaming TTS endpoint
+        @self.app.route('/chat/audio/stream', methods=['POST'])
+        def chat_audio_stream():
+            temp_file_path = None
+            try:
+                # Get the audio file from the request
+                audio_file = request.files.get('audio')
+                if not audio_file:
+                    return jsonify({'error': 'No audio file provided'})
+                
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                    temp_file_path = temp_file.name
+                    audio_file.save(temp_file_path)
+                
+                # Process STT and LLM first
+                user_message = self.conversation.stt.transcribe_audio(temp_file_path)
+                if not user_message:
+                    return jsonify({'error': 'Could not transcribe audio'})
+                
+                response, translation, llm_ms, translate_ms = self.process_message(user_message)
+                
+                # Return streaming response
+                def generate():
+                    # Send initial data
+                    yield f"data: {json.dumps({'type': 'text', 'user_message': user_message, 'response': response, 'translation': translation})}\n\n"
+                    
+                    # Stream real-time audio chunks from Google
+                    try:
+                        for audio_chunk in self.conversation.tts.synthesize_speech_streaming(response):
+                            yield f"data: {json.dumps({'type': 'audio_chunk', 'chunk': audio_chunk})}\n\n"
+                    except AttributeError:
+                        # Fallback if streaming not available
+                        audio_base64 = self.conversation.tts.synthesize_speech(response)
+                        yield f"data: {json.dumps({'type': 'audio_chunk', 'chunk': audio_base64})}\n\n"
+                    
+                    # Signal end
+                    yield f"data: {json.dumps({'type': 'audio_end'})}\n\n"
+                
+                return Response(generate(), mimetype='text/plain', headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive'
+                })
+                    
+            except Exception as e:
+                print(f"Error processing audio: {e}")
+                return jsonify({'error': 'Error processing audio'})
+            finally:
+                # Clean up temp file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try:
+                        os.unlink(temp_file_path)
+                    except Exception as cleanup_error:
+                        print(f"Warning: Could not delete temp file {temp_file_path}: {cleanup_error}")
+
         # Streaming STT endpoint
         @self.app.route('/stream/stt')
         def stream_stt():
@@ -120,10 +176,10 @@ class WebApp:
             # Handle commands
             command_result = self.conversation.handle_commands(user_input)
             if command_result in self.conversation.commands:
-                return "Command processed"
+                return "Command processed", "", 0, 0
             
             if not user_input.strip():
-                return "Please say something"
+                return "Please say something", "", 0, 0
             
             # Build prompt with memory
             formatted_prompt = self.conversation.memory.build_prompt(user_input)
@@ -146,7 +202,7 @@ class WebApp:
             
         except Exception as e:
             print(f"Error processing message: {e}")
-            return "Sorry, I encountered an error processing your message."
+            return "Sorry, I encountered an error processing your message.", "", 0, 0
 
     def run(self, debug=True):
         self.app.run(debug=debug)
