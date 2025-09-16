@@ -116,12 +116,9 @@ async function sendAudioMessage(audioBlob) {
                         const data = JSON.parse(line.slice(6));
                         
                         if (data.type === 'text') {
-                            // Display messages immediately
+                            // Display messages immediately (WITHOUT translation now)
                             addMessage(`You: ${data.user_message}`, 'user');
                             addMessage(`AI: ${data.response}`, 'ai');
-                            if (data.translation) {
-                                addMessage(`Translation: ${data.translation}`, 'translation');
-                            }
                         } else if (data.type === 'audio_chunk') {
                             console.log(`Received audio chunk, size: ${data.chunk.length}`);
                             
@@ -163,6 +160,11 @@ async function sendAudioMessage(audioBlob) {
                             console.log('Audio streaming complete');
                             // Close audio context after playback finishes
                             setTimeout(() => audioContext.close(), (nextPlayTime - audioContext.currentTime + 1) * 1000);
+                        } else if (data.type === 'translation') {
+                            // NEW: Handle translation after audio is complete
+                            addMessage(`Translation: ${data.text}`, 'translation');
+                        } else if (data.type === 'complete') {
+                            console.log('Streaming complete');
                         }
                     } catch (parseError) {
                         console.error('Error parsing SSE data:', parseError);

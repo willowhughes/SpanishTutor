@@ -75,7 +75,7 @@ class WebApp:
                 # Get input duration
                 input_duration_sec = float(request.form.get('input_duration', 0))
 
-                response_time = time.time() - response_start
+                response_time = (time.time() - response_start) * 1000
                 self._log_performance_metrics(input_duration_sec=input_duration_sec, stt_ms=stt_ms, llm_ms=llm_ms, response_time=response_time)
 
                 # Return streaming response (translation happens inside the generator)
@@ -131,7 +131,7 @@ class WebApp:
     
     def _generate_streaming_response(self, user_message, response):
         """Generate streaming SSE response with audio chunks."""
-        # Send initial data
+        # Send initial data WITHOUT translation
         yield f"data: {json.dumps({'type': 'text', 'user_message': user_message, 'response': response})}\n\n"
         
         try:
@@ -143,8 +143,18 @@ class WebApp:
             audio_base64 = self.conversation.tts.synthesize_speech(response)
             yield f"data: {json.dumps({'type': 'audio_chunk', 'chunk': audio_base64})}\n\n"
         
-        # Signal end
+        # Signal audio end
         yield f"data: {json.dumps({'type': 'audio_end'})}\n\n"
+
+        # Translate response
+        translation = self.conversation.translator.translate_text(response)
+        print(f"Translation: {translation}")
+        
+        # Send translation as final step
+        yield f"data: {json.dumps({'type': 'translation', 'text': translation})}\n\n"
+        
+        # Signal complete
+        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
     
     def _cleanup_temp_file(self, temp_file_path):
         """Clean up temporary file safely."""
