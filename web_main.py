@@ -15,7 +15,7 @@ def main():
     llm = LLMManager(model_name=config["llm_model_name"], api_key=os.environ.get("GROQ_API_KEY"))
     tts = TTSManager(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
     translator = Translator(google_credentials_path=config.get("google_credentials_path", "google_credentials.json"))
-    conversation = ConversationService(llm=llm, stt=stt, tts=tts, translator=translator, config=config)
+    conversation = ConversationService(llm=llm, stt=stt, tts=tts, translator=translator, config=config, selected_scenario="coffee_shop")
 
     web_app = WebApp(conversation=conversation)
     print("Starting server at http://127.0.0.1:5000")

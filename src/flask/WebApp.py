@@ -147,7 +147,7 @@ class WebApp:
         yield f"data: {json.dumps({'type': 'audio_end'})}\n\n"
 
         # Translate response
-        translation = self.conversation.translator.translate_text(response)
+        translation, translate_ms = self._translate(response)
         print(f"Translation: {translation}")
         
         # Send translation as final step

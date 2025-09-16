@@ -8,26 +8,19 @@ from src.TTSManager import TTSManager
 
 class ConversationService:
 
-    def __init__(self, llm = None, stt = None, tts = None, translator = None, config = None):
+    def __init__(self, llm = None, stt = None, tts = None, translator = None, config = None, selected_scenario = None):
         self.llm = llm
         self.config = config
         self.stt = stt
         self.tts = tts
         self.translator = translator
-        self.commands = ["BREAK", "CONTINUE"]
         self.memory = MemoryState(self.config["system_prompt"])
-
-    def handle_commands(self, prompt: str):
-        """handle special commands"""
-        if prompt.lower() == "/quit":
-            return self.commands[0]
-        elif prompt.lower() == "/clear":
-            self.memory.clear_memory()
-            return self.commands[1]
-        elif prompt.lower() == "/help":
-            print("Todo help cmd")
-            return self.commands[1]
-        return prompt
+        if selected_scenario in self.config["roleplay_scenarios"]:
+            scenario_data = self.config["roleplay_scenarios"][selected_scenario]
+            self.memory.set_roleplay_scenario(scenario_data["prompt"])
+            print(f"Scenario set to: {scenario_data['name']} ({scenario_data['difficulty']})")
+        else:
+            print(f"Invalid scenario: {selected_scenario}")
         
     def get_voice_input(self):
         while self.tts.is_playing:
