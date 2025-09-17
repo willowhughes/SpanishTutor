@@ -1,10 +1,9 @@
-from src.LLMInterface import LLMInterface
 from src.Utils import Utils
 import os
 from groq import Groq
 import time
 
-class LLMManager(LLMInterface):
+class LLMManager():
 
     def __init__(self, model_name: str = "llama-3.3-70b-versatile", api_key: str = None):
         self.model_name = model_name

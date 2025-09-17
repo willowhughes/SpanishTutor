@@ -6,13 +6,12 @@ from google.oauth2 import service_account
 import google.auth.transport.requests
 import requests
 import base64
-from src.TTSInterface import TTSInterface
 import sounddevice as sd
 import soundfile as sf
 import threading
 import time
 
-class TTSManager(TTSInterface):
+class TTSManager():
 
     def __init__(self, google_credentials_path: str = "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"):
         self.google_credentials_path = google_credentials_path
@@ -116,30 +115,3 @@ class TTSManager(TTSInterface):
             full_audio = self.synthesize_speech(text)
             print(f"Fallback TTS generated audio of length: {len(full_audio) if full_audio else 0}")
             yield full_audio
-
-    def save_audio(self, audio_base64, file_path="audio/output/output.wav"):
-        audio_bytes = base64.b64decode(audio_base64)
-        with open(file_path, "wb") as audio_file:
-            audio_file.write(audio_bytes)
-
-    def play_audio_locally(self, file_path="audio/output/output.wav"):
-        def _play_audio_thread():
-            try:
-                self.is_playing = True
-                
-                # Load audio
-                data, samplerate = sf.read(file_path, dtype='float32')
-                
-                # Play using sounddevice
-                sd.play(data, samplerate)
-                sd.wait()  # Wait for playback to complete
-                
-                self.is_playing = False
-                
-            except Exception as e:
-                print(f"Error playing audio: {e}")
-                self.is_playing = False
-        
-        # Run audio playback in separate thread
-        audio_thread = threading.Thread(target=_play_audio_thread, daemon=True)
-        audio_thread.start()
