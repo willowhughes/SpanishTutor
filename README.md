@@ -23,4 +23,30 @@ TTS: Starting playing asap (before whole speech is finished) [audio1: 200ms] →
 
 - Make llm tell student when things are said incorrectly
 - Have a post-convo preformance eval
-- 
+
+
+front end roadmap:
+Week 1: Polish Current UI
+Day 1-2: Better CSS styling (colors, spacing, typography)
+Day 3-4: Add loading states and visual feedback
+Day 5-7: Mobile responsiveness and touch improvements
+Week 2: Modern JavaScript
+Day 1-3: Refactor to ES6 modules and modern syntax
+Day 4-5: Add error handling and better state management
+Day 6-7: Implement new features (settings panel, scenario switching)
+Week 3: Advanced Vanilla JS
+Day 1-3: Component-like architecture (reusable functions)
+Day 4-5: Add animations and smooth transitions
+Day 6-7: Audio visualization and better UX
+Week 4: React Basics
+Day 1-2: Setup React app and understand components
+Day 3-4: Convert record button and chat display to React
+Day 5-7: Add state management and props
+Week 5: React Features
+Day 1-3: Custom hooks for audio recording
+Day 4-5: Context for global state
+Day 6-7: Real-time updates and streaming integration
+Week 6: Polish & Deploy
+Day 1-3: UI library integration (Tailwind CSS)
+Day 4-5: Advanced features (scenario switching, history)
+Day 6-7: Production build and deployment

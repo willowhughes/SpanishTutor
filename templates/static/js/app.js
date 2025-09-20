@@ -1,107 +1,141 @@
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
-let isInitialized = false;
-let isButtonPressed = false;
-
-const recordBtn = document.getElementById('recordBtn');
-const chatDiv = document.getElementById('chat');
-
-// Initialize audio recording
-async function initializeAudio() {
-    if (isInitialized) return;
+class SpanishTutorApp {
+    constructor() {
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isRecording = false;
+        this.isInitialized = false;
+        this.isButtonPressed = false;
+        
+        this.elements = {
+            recordBtn: document.getElementById('recordBtn'),
+            chatDiv: document.getElementById('chat'),
+            input: document.getElementById('input')
+        };
+        
+        this.audioStreamPlayer = new AudioStreamPlayer();
+        this.init();
+    }
     
-    try {
-        recordBtn.textContent = 'Requesting microphone...';
-        recordBtn.className = 'disabled';
+    async init() {
+        this.setupEventListeners();
+        await this.initializeAudio();
+        this.showWelcomeMessage();
+    }
+    
+    setupEventListeners() {
+        // Record button events
+        this.elements.recordBtn.addEventListener('mousedown', () => this.startRecording());
+        this.elements.recordBtn.addEventListener('mouseup', () => this.stopRecording());
+        this.elements.recordBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.startRecording();
+        });
+        this.elements.recordBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.stopRecording();
+        });
+        this.elements.recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
         
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        // Text input
+        this.elements.input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.sendTextMessage();
+        });
+    }
+    
+    async initializeAudio() {
+        if (this.isInitialized) return;
         
-        mediaRecorder.ondataavailable = (event) => {
-            audioChunks.push(event.data);
+        try {
+            this.updateRecordButton('disabled', 'Requesting microphone...');
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.setupMediaRecorder(stream);
+            
+            this.isInitialized = true;
+            this.updateRecordButton('ready', 'Hold to Record');
+            
+            if (this.isButtonPressed) {
+                this.startRecording();
+            }
+            
+        } catch (error) {
+            console.error('Microphone access error:', error);
+            this.addMessage('Error: Could not access microphone', 'ai');
+            this.updateRecordButton('disabled', 'Microphone access denied');
+        }
+    }
+    
+    setupMediaRecorder(stream) {
+        this.mediaRecorder = new MediaRecorder(stream);
+        
+        this.mediaRecorder.ondataavailable = (event) => {
+            this.audioChunks.push(event.data);
         };
         
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            audioChunks = [];
-            await sendAudioMessage(audioBlob);
+        this.mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+            this.audioChunks = [];
+            await this.sendAudioMessage(audioBlob);
         };
+    }
+    
+    startRecording() {
+        this.isButtonPressed = true;
         
-        isInitialized = true;
-        recordBtn.textContent = 'Hold to Record';
-        recordBtn.className = 'ready';
-        
-        // If button is still being pressed after initialization, start recording
-        if (isButtonPressed) {
-            startRecording();
+        if (!this.isInitialized) {
+            this.initializeAudio();
+            return;
         }
         
-    } catch (error) {
-        console.error('Error accessing microphone:', error);
-        addMessage('Error: Could not access microphone', 'ai');
-        recordBtn.textContent = 'Microphone access denied';
-        recordBtn.className = 'disabled';
-    }
-}
-
-function startRecording() {
-    isButtonPressed = true;
-    
-    if (!isInitialized) {
-        initializeAudio();
-        return;
-    }
-
-    if (isRecording) return; // Already recording
-
-    audioChunks = [];
-    mediaRecorder.start();
-    isRecording = true;
-    recordBtn.textContent = '🔴 Recording... (Release to stop)';
-    recordBtn.className = 'recording';
-    addMessage('Recording... Release button to stop', 'ai');
-}
-
-function stopRecording() {
-    isButtonPressed = false;
-    
-    if (!isRecording || !mediaRecorder) return;
-
-    mediaRecorder.stop();
-    isRecording = false;
-    recordBtn.textContent = 'Hold to Record';
-    recordBtn.className = 'ready';
-    addMessage('Processing recording...', 'ai');
-}
-
-async function sendAudioMessage(audioBlob) {
-    // Get input audio duration from the blob
-    const inputDuration = await getAudioDuration(audioBlob);
-    
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
-    formData.append('input_duration', inputDuration);
-    
-    try {
-        recordBtn.className = 'disabled';
-        recordBtn.textContent = 'Processing...';
+        if (this.isRecording) return;
         
-        // Use streaming endpoint for real-time audio
-        const response = await fetch('/chat/audio/stream', {
-            method: 'POST',
-            body: formData
-        });
+        this.audioChunks = [];
+        this.mediaRecorder.start();
+        this.isRecording = true;
+        this.updateRecordButton('recording', '🔴 Recording... (Release to stop)');
+        this.addMessage('Recording... Release button to stop', 'system');
+    }
+    
+    stopRecording() {
+        this.isButtonPressed = false;
         
+        if (!this.isRecording || !this.mediaRecorder) return;
+        
+        this.mediaRecorder.stop();
+        this.isRecording = false;
+        this.updateRecordButton('ready', 'Hold to Record');
+        this.addMessage('Processing recording...', 'system');
+    }
+    
+    async sendAudioMessage(audioBlob) {
+        try {
+            this.updateRecordButton('disabled', 'Processing...');
+            
+            const inputDuration = await AudioUtils.getDuration(audioBlob);
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+            formData.append('input_duration', inputDuration);
+            
+            const response = await fetch('/chat/audio/stream', {
+                method: 'POST',
+                body: formData
+            });
+            
+            await this.handleStreamingResponse(response);
+            
+        } catch (error) {
+            console.error('Error sending audio:', error);
+            this.addMessage('Error sending audio message', 'ai');
+        } finally {
+            this.updateRecordButton('ready', 'Hold to Record');
+        }
+    }
+    
+    async handleStreamingResponse(response) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         
-        // Set up Web Audio API for real-time audio streaming
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const sampleRate = 24000; // Google TTS LINEAR16 sample rate
-        
-        let nextPlayTime = audioContext.currentTime;
-        let isFirstChunk = true;
+        await this.audioStreamPlayer.initialize();
         
         while (true) {
             const { done, value } = await reader.read();
@@ -114,58 +148,7 @@ async function sendAudioMessage(audioBlob) {
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        
-                        if (data.type === 'text') {
-                            // Display messages immediately (WITHOUT translation now)
-                            addMessage(`You: ${data.user_message}`, 'user');
-                            addMessage(`AI: ${data.response}`, 'ai');
-                        } else if (data.type === 'audio_chunk') {
-                            console.log(`Received audio chunk, size: ${data.chunk.length}`);
-                            
-                            // convert base64 to raw audio data
-                            const binaryString = atob(data.chunk);
-                            const bytes = new Uint8Array(binaryString.length);
-                            for (let i = 0; i < binaryString.length; i++) {
-                                bytes[i] = binaryString.charCodeAt(i);
-                            }
-                            
-                            // convert 16-bit PCM to Float32 for Web Audio API
-                            const pcmData = new Int16Array(bytes.buffer);
-                            const floatData = new Float32Array(pcmData.length);
-                            for (let i = 0; i < pcmData.length; i++) {
-                                floatData[i] = pcmData[i] / 32768.0; // Convert to -1.0 to 1.0 range
-                            }
-                            
-                            // Schedule this chunk for immediate playback
-                            const audioBufferNode = audioContext.createBuffer(1, floatData.length, sampleRate);
-                            audioBufferNode.getChannelData(0).set(floatData);
-                            
-                            const source = audioContext.createBufferSource();
-                            source.buffer = audioBufferNode;
-                            source.connect(audioContext.destination);
-                            
-                            // Schedule playback for seamless streaming
-                            const startTime = Math.max(nextPlayTime, audioContext.currentTime + 0.01);
-                            source.start(startTime);
-                            
-                            // Update next play time
-                            nextPlayTime = startTime + audioBufferNode.duration;
-                            
-                            if (isFirstChunk) {
-                                console.log('Started real-time audio streaming!');
-                                isFirstChunk = false;
-                            }
-                            
-                        } else if (data.type === 'audio_end') {
-                            console.log('Audio streaming complete');
-                            // Close audio context after playback finishes
-                            setTimeout(() => audioContext.close(), (nextPlayTime - audioContext.currentTime + 1) * 1000);
-                        } else if (data.type === 'translation') {
-                            // NEW: Handle translation after audio is complete
-                            addMessage(`Translation: ${data.text}`, 'translation');
-                        } else if (data.type === 'complete') {
-                            console.log('Streaming complete');
-                        }
+                        await this.handleStreamData(data);
                     } catch (parseError) {
                         console.error('Error parsing SSE data:', parseError);
                     }
@@ -173,148 +156,153 @@ async function sendAudioMessage(audioBlob) {
             }
         }
         
-    } catch (error) {
-        console.error('Error sending audio:', error);
-        addMessage('Error sending audio message', 'ai');
-    } finally {
-        recordBtn.className = 'ready';
-        recordBtn.textContent = 'Record';
+        this.audioStreamPlayer.cleanup();
+    }
+    
+    async handleStreamData(data) {
+        switch (data.type) {
+            case 'text':
+                this.addMessage(`You: ${data.user_message}`, 'user');
+                this.addMessage(`AI: ${data.response}`, 'ai');
+                break;
+            case 'audio_chunk':
+                await this.audioStreamPlayer.playChunk(data.chunk);
+                break;
+            case 'audio_end':
+                console.log('Audio streaming complete');
+                break;
+            case 'translation':
+                this.addMessage(`Translation: ${data.text}`, 'translation');
+                break;
+            case 'complete':
+                console.log('Streaming complete');
+                break;
+        }
+    }
+    
+    async sendTextMessage() {
+        const message = this.elements.input.value.trim();
+        if (!message) return;
+        
+        this.addMessage(`You: ${message}`, 'user');
+        this.elements.input.value = '';
+        
+        try {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message})
+            });
+            
+            const data = await response.json();
+            this.addMessage(`AI: ${data.response}`, 'ai');
+            
+        } catch (error) {
+            this.addMessage('Error sending message', 'ai');
+        }
+    }
+    
+    updateRecordButton(className, text) {
+        this.elements.recordBtn.className = className;
+        this.elements.recordBtn.textContent = text;
+    }
+    
+    addMessage(message, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.textContent = message;
+        this.elements.chatDiv.appendChild(messageDiv);
+        this.elements.chatDiv.scrollTop = this.elements.chatDiv.scrollHeight;
+    }
+    
+    showWelcomeMessage() {
+        setTimeout(() => {
+            this.addMessage('Click "Hold to Record" to start speaking', 'ai');
+        }, 500);
     }
 }
 
-async function playAudioChunkProgressive(audioChunkBase64, audioContext, scheduleTime) {
-    try {
-        // Convert base64 to array buffer
-        const binaryString = atob(audioChunkBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        // Decode audio data
-        const audioBuffer = await audioContext.decodeAudioData(bytes.buffer.slice());
-        
-        // Create audio source and schedule playback
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        
-        // Schedule to play at the right time for seamless playback
-        const playTime = Math.max(scheduleTime, audioContext.currentTime);
-        source.start(playTime);
-        
-        console.log(`Playing audio chunk at ${playTime.toFixed(2)}s`);
-        
-    } catch (error) {
-        console.error('Error playing audio chunk:', error);
-        // Fallback to simple audio element for this chunk
+class AudioStreamPlayer {
+    constructor() {
+        this.audioContext = null;
+        this.nextPlayTime = 0;
+        this.sampleRate = 24000;
+        this.isFirstChunk = true;
+    }
+    
+    async initialize() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.nextPlayTime = this.audioContext.currentTime;
+        this.isFirstChunk = true;
+    }
+    
+    async playChunk(base64Chunk) {
         try {
-            const binaryString = atob(audioChunkBase64);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            const floatData = AudioUtils.base64ToPCM(base64Chunk);
+            
+            const audioBufferNode = this.audioContext.createBuffer(1, floatData.length, this.sampleRate);
+            audioBufferNode.getChannelData(0).set(floatData);
+            
+            const source = this.audioContext.createBufferSource();
+            source.buffer = audioBufferNode;
+            source.connect(this.audioContext.destination);
+            
+            const startTime = Math.max(this.nextPlayTime, this.audioContext.currentTime + 0.01);
+            source.start(startTime);
+            
+            this.nextPlayTime = startTime + audioBufferNode.duration;
+            
+            if (this.isFirstChunk) {
+                console.log('Started real-time audio streaming!');
+                this.isFirstChunk = false;
             }
             
-            const audioBlob = new Blob([bytes], { type: 'audio/wav' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            audio.play();
-            audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl));
-        } catch (fallbackError) {
-            console.error('Fallback audio playback also failed:', fallbackError);
+        } catch (error) {
+            console.error('Error playing audio chunk:', error);
+        }
+    }
+    
+    cleanup() {
+        if (this.audioContext) {
+            setTimeout(() => this.audioContext.close(), 
+                (this.nextPlayTime - this.audioContext.currentTime + 1) * 1000);
         }
     }
 }
 
-// get audio duration using Web Audio API
-async function getAudioDuration(audioBlob) {
-    try {
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        const duration = audioBuffer.duration;
-        audioContext.close();
-        return duration;
-    } catch (error) {
-        console.error('Error getting audio duration:', error);
-        // Fallback to 0 if we can't determine duration
-        return 0;
+class AudioUtils {
+    static async getDuration(audioBlob) {
+        try {
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const duration = audioBuffer.duration;
+            audioContext.close();
+            return duration;
+        } catch (error) {
+            console.error('Error getting audio duration:', error);
+            return 0;
+        }
     }
-}
-
-async function sendTextMessage() {
-    const input = document.getElementById('input');
-    const message = input.value;
-    if (!message.trim()) return;
     
-    addMessage(`You: ${message}`, 'user');
-    input.value = '';
-    
-    try {
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: message})
-        });
-        
-        const data = await response.json();
-        addMessage(`AI: ${data.response}`, 'ai');
-        
-    } catch (error) {
-        addMessage('Error sending message', 'ai');
-    }
-}
-
-function addMessage(message, type) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${type}`;
-    messageDiv.textContent = message;
-    chatDiv.appendChild(messageDiv);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
-}
-
-function playAudioResponse(audioBase64) {
-    try {
-        // Convert base64 to binary
-        const binaryString = atob(audioBase64);
+    static base64ToPCM(base64Chunk) {
+        const binaryString = atob(base64Chunk);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
         }
         
-        // Create audio blob
-        const audioBlob = new Blob([bytes], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
+        const pcmData = new Int16Array(bytes.buffer);
+        const floatData = new Float32Array(pcmData.length);
+        for (let i = 0; i < pcmData.length; i++) {
+            floatData[i] = pcmData[i] / 32768.0;
+        }
         
-        // Create and play audio
-        const audio = new Audio(audioUrl);
-        audio.play();
-        
-        // Clean up URL when done
-        audio.addEventListener('ended', () => {
-            URL.revokeObjectURL(audioUrl);
-        });
-        
-    } catch (error) {
-        console.error('Error playing audio:', error);
+        return floatData;
     }
 }
 
-// Initialize when page loads
+// Initialize app when page loads
 window.addEventListener('load', () => {
-    setTimeout(() => {
-        addMessage('Click "Hold to Record" to start speaking', 'ai');
-    }, 500);
-});
-
-// Prevent context menu on right click for mobile
-recordBtn.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-});
-
-// Allow Enter key to send text messages
-document.getElementById('input').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        sendTextMessage();
-    }
+    new SpanishTutorApp();
 });
