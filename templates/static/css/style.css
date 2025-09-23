@@ -64,6 +64,11 @@ body {
     cursor: not-allowed;
 }
 
+.interupt { 
+    background-color: #cccccc; 
+    cursor: not-allowed; 
+}
+
 #input {
     flex: 1;
 }

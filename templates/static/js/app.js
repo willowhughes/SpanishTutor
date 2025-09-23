@@ -2,9 +2,10 @@ class SpanishTutorApp {
     constructor() {
         this.mediaRecorder = null;
         this.audioChunks = [];
-        this.isRecording = false;
         this.isInitialized = false;
-        this.isButtonPressed = false;
+        
+        // Replace all those booleans with one clear state
+        this.appState = 'ready'; // 'ready' | 'recording' | 'processing' | 'playing' | 'disabled'
         
         this.elements = {
             recordBtn: document.getElementById('recordBtn'),
@@ -14,6 +15,30 @@ class SpanishTutorApp {
         
         this.audioStreamPlayer = new AudioStreamPlayer();
         this.init();
+    }
+    
+    setState(newState) {
+        this.appState = newState;
+        
+        // Update UI based on state
+        const stateConfig = {
+            'mic_request' : { className: 'disabled', text: 'Requesting microphone...' },
+            'ready': { className: 'ready', text: 'Hold to Record' },
+            'recording': { className: 'recording', text: '🔴 Recording... (Release to stop)' },
+            'processing': { className: 'disabled', text: 'Processing...' },
+            'playing': { className: 'interupt', text: '⏹️ Press to interupt...' },
+            'no_mic': { className: 'disabled', text: 'Microphone access denied' }
+        };
+        
+        const config = stateConfig[newState];
+        if (config) {
+            this.elements.recordBtn.className = config.className;
+            this.elements.recordBtn.textContent = config.text;
+        }
+    }
+    
+    canRecord() {
+        return this.appState === 'ready' && this.isInitialized;
     }
     
     async init() {
@@ -46,22 +71,18 @@ class SpanishTutorApp {
         if (this.isInitialized) return;
         
         try {
-            this.updateRecordButton('disabled', 'Requesting microphone...');
+            this.setState('mic_req')
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.setupMediaRecorder(stream);
             
             this.isInitialized = true;
-            this.updateRecordButton('ready', 'Hold to Record');
-            
-            if (this.isButtonPressed) {
-                this.startRecording();
-            }
+            this.setState('ready')
             
         } catch (error) {
             console.error('Microphone access error:', error);
             this.addMessage('Error: Could not access microphone', 'ai');
-            this.updateRecordButton('disabled', 'Microphone access denied');
+            this.setState('no_mic')
         }
     }
     
@@ -80,55 +101,20 @@ class SpanishTutorApp {
     }
     
     startRecording() {
-        this.isButtonPressed = true;
-        
-        if (!this.isInitialized) {
-            this.initializeAudio();
-            return;
-        }
-        
-        if (this.isRecording) return;
+        if (!this.canRecord()) return;
         
         this.audioChunks = [];
         this.mediaRecorder.start();
-        this.isRecording = true;
-        this.updateRecordButton('recording', '🔴 Recording... (Release to stop)');
+        this.setState('recording');
         this.addMessage('Recording... Release button to stop', 'system');
     }
     
     stopRecording() {
-        this.isButtonPressed = false;
-        
-        if (!this.isRecording || !this.mediaRecorder) return;
+        if (this.appState !== 'recording' || !this.mediaRecorder) return;
         
         this.mediaRecorder.stop();
-        this.isRecording = false;
-        this.updateRecordButton('ready', 'Hold to Record');
+        this.setState('processing');
         this.addMessage('Processing recording...', 'system');
-    }
-    
-    async sendAudioMessage(audioBlob) {
-        try {
-            this.updateRecordButton('disabled', 'Processing...');
-            
-            const inputDuration = await AudioUtils.getDuration(audioBlob);
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.wav');
-            formData.append('input_duration', inputDuration);
-            
-            const response = await fetch('/chat/audio/stream', {
-                method: 'POST',
-                body: formData
-            });
-            
-            await this.handleStreamingResponse(response);
-            
-        } catch (error) {
-            console.error('Error sending audio:', error);
-            this.addMessage('Error sending audio message', 'ai');
-        } finally {
-            this.updateRecordButton('ready', 'Hold to Record');
-        }
     }
     
     async handleStreamingResponse(response) {
@@ -136,6 +122,11 @@ class SpanishTutorApp {
         const decoder = new TextDecoder();
         
         await this.audioStreamPlayer.initialize();
+        
+        // Simple callback - just go back to ready when done
+        this.audioStreamPlayer.onPlaybackComplete = () => {
+            this.setState('ready');
+        };
         
         while (true) {
             const { done, value } = await reader.read();
@@ -156,7 +147,7 @@ class SpanishTutorApp {
             }
         }
         
-        this.audioStreamPlayer.cleanup();
+        this.audioStreamPlayer.finishStreaming();
     }
     
     async handleStreamData(data) {
@@ -166,6 +157,9 @@ class SpanishTutorApp {
                 this.addMessage(`AI: ${data.response}`, 'ai');
                 break;
             case 'audio_chunk':
+                if (this.appState === 'processing') {
+                    this.setState('playing');
+                }
                 await this.audioStreamPlayer.playChunk(data.chunk);
                 break;
             case 'audio_end':
@@ -177,6 +171,29 @@ class SpanishTutorApp {
             case 'complete':
                 console.log('Streaming complete');
                 break;
+        }
+    }
+    
+    async sendAudioMessage(audioBlob) {
+        if (this.appState !== 'processing') return;
+        
+        try {
+            const inputDuration = await AudioUtils.getDuration(audioBlob);
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+            formData.append('input_duration', inputDuration);
+            
+            const response = await fetch('/chat/audio/stream', {
+                method: 'POST',
+                body: formData
+            });
+            
+            await this.handleStreamingResponse(response);
+            
+        } catch (error) {
+            console.error('Error sending audio:', error);
+            this.addMessage('Error sending audio message', 'ai');
+            this.setState('ready');
         }
     }
     
@@ -228,12 +245,15 @@ class AudioStreamPlayer {
         this.nextPlayTime = 0;
         this.sampleRate = 24000;
         this.isFirstChunk = true;
+        this.streamingComplete = false;
+        this.onPlaybackComplete = null; // Callback for when audio actually finishes
     }
     
     async initialize() {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         this.nextPlayTime = this.audioContext.currentTime;
         this.isFirstChunk = true;
+        this.streamingComplete = false;
     }
     
     async playChunk(base64Chunk) {
@@ -252,6 +272,9 @@ class AudioStreamPlayer {
             
             this.nextPlayTime = startTime + audioBufferNode.duration;
             
+            // Check if this is the last chunk that will play
+            this.checkIfPlaybackComplete();
+            
             if (this.isFirstChunk) {
                 console.log('Started real-time audio streaming!');
                 this.isFirstChunk = false;
@@ -262,10 +285,27 @@ class AudioStreamPlayer {
         }
     }
     
+    finishStreaming() {
+        this.streamingComplete = true;
+        this.checkIfPlaybackComplete();
+    }
+    
+    checkIfPlaybackComplete() {
+        if (this.streamingComplete) {
+            // Schedule callback for when the last audio finishes
+            const timeUntilComplete = (this.nextPlayTime - this.audioContext.currentTime) * 1000;
+            setTimeout(() => {
+                if (this.onPlaybackComplete) {
+                    this.onPlaybackComplete();
+                }
+            }, Math.max(0, timeUntilComplete));
+        }
+    }
+    
     cleanup() {
         if (this.audioContext) {
-            setTimeout(() => this.audioContext.close(), 
-                (this.nextPlayTime - this.audioContext.currentTime + 1) * 1000);
+            const timeUntilComplete = (this.nextPlayTime - this.audioContext.currentTime + 1) * 1000;
+            setTimeout(() => this.audioContext.close(), timeUntilComplete);
         }
     }
 }
