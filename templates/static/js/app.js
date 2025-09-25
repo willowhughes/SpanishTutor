@@ -15,18 +15,21 @@ class SpanishTutorApp {
         
         this.audioStreamPlayer = new AudioStreamPlayer();
         this.init();
+        
+        // Streaming control
+        this.activeStreamId = 0;       // id of currently "owned" stream
+        this.streamCounter = 0;        // monotonic counter
     }
     
     setState(newState) {
         this.appState = newState;
         
-        // Update UI based on state
         const stateConfig = {
             'mic_request' : { className: 'disabled', text: 'Requesting microphone...' },
             'ready': { className: 'ready', text: 'Hold to Record' },
             'recording': { className: 'recording', text: '🔴 Recording... (Release to stop)' },
-            'processing': { className: 'disabled', text: 'Processing...' },
-            'playing': { className: 'interupt', text: '⏹️ Press to interupt...' },
+            'processing': { className: 'ready', text: '⏹️ Press to interupt...' },
+            'playing': { className: 'ready', text: '⏹️ Press to interupt...' },
             'no_mic': { className: 'disabled', text: 'Microphone access denied' }
         };
         
@@ -38,7 +41,7 @@ class SpanishTutorApp {
     }
     
     canRecord() {
-        return this.appState === 'ready' && this.isInitialized;
+        return (this.appState === 'ready' || this.appState === 'playing' || this.appState === 'processing') && this.isInitialized;
     }
     
     async init() {
@@ -71,7 +74,8 @@ class SpanishTutorApp {
         if (this.isInitialized) return;
         
         try {
-            this.setState('mic_req')
+            // Correct state key (was 'mic_req')
+            this.setState('mic_request')
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.setupMediaRecorder(stream);
@@ -103,6 +107,14 @@ class SpanishTutorApp {
     startRecording() {
         if (!this.canRecord()) return;
         
+        // Always invalidate any prior stream when user initiates a new recording (unless already recording)
+        // This covers fast sequences where state might have returned to 'ready' between chunks
+        if (this.appState !== 'recording') {
+            this.activeStreamId = ++this.streamCounter; // new stream id reserved for the *next* outbound request
+            console.log(`[Stream ${this.activeStreamId}] User interrupt / new recording started. Invalidated prior streams.`);
+            this.audioStreamPlayer.stop();
+        }
+        
         this.audioChunks = [];
         this.mediaRecorder.start();
         this.setState('recording');
@@ -121,11 +133,20 @@ class SpanishTutorApp {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         
+        // Claim a new active stream id for this inbound response (only now that response exists)
+        const streamId = ++this.streamCounter;
+        this.activeStreamId = streamId;
+        console.log(`[Stream ${streamId}] Started streaming response`);
         await this.audioStreamPlayer.initialize();
         
-        // Simple callback - just go back to ready when done
+        // Playback completion guarded by stream id so stale completions don't override newer state
         this.audioStreamPlayer.onPlaybackComplete = () => {
-            this.setState('ready');
+            if (this.activeStreamId === streamId) {
+                console.log(`[Stream ${streamId}] Playback complete (active). Returning to ready.`);
+                this.setState('ready');
+            } else {
+                console.log(`[Stream ${streamId}] Playback complete (stale, ignored).`);
+            }
         };
         
         while (true) {
@@ -139,7 +160,11 @@ class SpanishTutorApp {
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        await this.handleStreamData(data);
+                        if (this.activeStreamId !== streamId) {
+                            // Stale stream, ignore silently
+                            continue;
+                        }
+                        await this.handleStreamData(data, streamId);
                     } catch (parseError) {
                         console.error('Error parsing SSE data:', parseError);
                     }
@@ -147,29 +172,38 @@ class SpanishTutorApp {
             }
         }
         
-        this.audioStreamPlayer.finishStreaming();
+        // Mark streaming complete only if still current
+        if (this.activeStreamId === streamId) {
+            this.audioStreamPlayer.finishStreaming();
+        } else {
+            console.log(`[Stream ${streamId}] Finished receiving (stale, not finalizing playback).`);
+        }
     }
     
-    async handleStreamData(data) {
+    async handleStreamData(data, streamId) {
+        if (this.activeStreamId !== streamId) return; // stale guard
         switch (data.type) {
             case 'text':
+                console.log(`[Stream ${streamId}] Text received.`);
                 this.addMessage(`You: ${data.user_message}`, 'user');
                 this.addMessage(`AI: ${data.response}`, 'ai');
                 break;
             case 'audio_chunk':
+                if (this.activeStreamId !== streamId) return; // mid-call stale guard
                 if (this.appState === 'processing') {
                     this.setState('playing');
                 }
                 await this.audioStreamPlayer.playChunk(data.chunk);
                 break;
             case 'audio_end':
-                console.log('Audio streaming complete');
+                console.log(`[Stream ${streamId}] Audio stream declared complete`);
                 break;
             case 'translation':
+                console.log(`[Stream ${streamId}] Translation received`);
                 this.addMessage(`Translation: ${data.text}`, 'translation');
                 break;
             case 'complete':
-                console.log('Streaming complete');
+                console.log(`[Stream ${streamId}] Complete signal received`);
                 break;
         }
     }
@@ -241,16 +275,17 @@ class SpanishTutorApp {
 
 class AudioStreamPlayer {
     constructor() {
-        this.audioContext = null;
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         this.nextPlayTime = 0;
         this.sampleRate = 24000;
         this.isFirstChunk = true;
         this.streamingComplete = false;
         this.onPlaybackComplete = null; // Callback for when audio actually finishes
+        this.activeSources = []; // Track active audio sources for interruption
     }
     
     async initialize() {
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Don't create new AudioContext, just reset timing and state
         this.nextPlayTime = this.audioContext.currentTime;
         this.isFirstChunk = true;
         this.streamingComplete = false;
@@ -266,6 +301,17 @@ class AudioStreamPlayer {
             const source = this.audioContext.createBufferSource();
             source.buffer = audioBufferNode;
             source.connect(this.audioContext.destination);
+            
+            // Track this source for interruption capability
+            this.activeSources.push(source);
+            
+            // Remove from tracking when it ends naturally
+            source.onended = () => {
+                const index = this.activeSources.indexOf(source);
+                if (index > -1) {
+                    this.activeSources.splice(index, 1);
+                }
+            };
             
             const startTime = Math.max(this.nextPlayTime, this.audioContext.currentTime + 0.01);
             source.start(startTime);
@@ -286,6 +332,7 @@ class AudioStreamPlayer {
     }
     
     finishStreaming() {
+        console.log('All audio chunks received');
         this.streamingComplete = true;
         this.checkIfPlaybackComplete();
     }
@@ -302,11 +349,16 @@ class AudioStreamPlayer {
         }
     }
     
-    cleanup() {
-        if (this.audioContext) {
-            const timeUntilComplete = (this.nextPlayTime - this.audioContext.currentTime + 1) * 1000;
-            setTimeout(() => this.audioContext.close(), timeUntilComplete);
-        }
+    stop() {
+        console.log('Stopping audio playback');
+        this.activeSources.forEach(source => {
+            try {
+                source.stop();
+            } catch (e) {
+                // Source might already be stopped, ignore
+            }
+        });
+        this.activeSources = [];
     }
 }
 
