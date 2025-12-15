@@ -3,46 +3,27 @@ import { ChatInterface } from './components/ChatInterface';
 import { AudioRecorder } from './components/AudioRecorder';
 import { MessageInput } from './components/MessageInput';
 import type { Message } from './types';
+import { AudioStreamPlayer } from './services/AudioStreamPlayer';
 import { streamAudio, sendText } from './services/api';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing' | 'playing'>('idle');
-  const audioQueue = useRef<string[]>([]);
-  const isPlayingRef = useRef(false);
-
-  const playNextAudio = async () => {
-    if (isPlayingRef.current || audioQueue.current.length === 0) return;
-
-    isPlayingRef.current = true;
-    setStatus('playing');
-
-    const audioData = audioQueue.current.shift();
-    if (!audioData) {
-      isPlayingRef.current = false;
-      setStatus('idle');
-      return;
-    }
-
-    const audio = new Audio("data:audio/mp3;base64," + audioData);
-    audio.onended = () => {
-      isPlayingRef.current = false;
-      playNextAudio();
-    };
-
-    try {
-      await audio.play();
-    } catch (e) {
-      console.error("Audio playback error", e);
-      isPlayingRef.current = false;
-      playNextAudio();
-    }
-  };
+  // Use a ref to keep the player instance stable across renders
+  const audioPlayerRef = useRef<AudioStreamPlayer>(new AudioStreamPlayer());
 
   const handleAudio = async (blob: Blob, duration: number) => {
     setStatus('processing');
 
-    await streamAudio(blob, duration, (data) => {
+    // Initialize audio context on user interaction (recording start/end is a safe place)
+    await audioPlayerRef.current.initialize();
+
+    // Setup playback completion callback
+    audioPlayerRef.current.onPlaybackComplete = () => {
+      setStatus('idle');
+    };
+
+    await streamAudio(blob, duration, async (data) => {
       if (data.type === 'text') {
         setMessages(prev => [
           ...prev,
@@ -59,8 +40,10 @@ function App() {
           }
         ]);
       } else if (data.type === 'audio_chunk') {
-        audioQueue.current.push(data.chunk);
-        playNextAudio();
+        setStatus('playing');
+        await audioPlayerRef.current.playChunk(data.chunk);
+      } else if (data.type === 'audio_end') {
+        audioPlayerRef.current.finishStreaming();
       } else if (data.type === 'translation') {
         setMessages(prev => prev.map(m =>
           m.role === 'assistant' && m.isStreaming ? { ...m, translation: data.text } : m
@@ -69,9 +52,7 @@ function App() {
         setMessages(prev => prev.map(m => m.isStreaming ? { ...m, isStreaming: false } : m));
       }
     }, () => {
-      if (audioQueue.current.length === 0 && !isPlayingRef.current) {
-        setStatus('idle');
-      }
+      // On stream close - relying on audio_end/finishStreaming for state change
     }, (err) => {
       console.error("Audio Stream Error", err);
       setStatus('idle');
@@ -95,14 +76,26 @@ function App() {
       }]);
 
       if (res.audio) {
-        audioQueue.current.push(res.audio);
-        playNextAudio();
+        // For text response, we get a single base64 chunk usually, 
+        // but we can still use our player if we wrap it or just use simple playback.
+        // Since our new player is PCM specific and res.audio might be getting MP3 
+        // if we didn't change backend... wait, backend sends LINEAR16?
+        // The previous code implies backend sends LINEAR16 always.
+        // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
+
+        await audioPlayerRef.current.initialize();
+        setStatus('playing');
+        audioPlayerRef.current.onPlaybackComplete = () => setStatus('idle');
+        await audioPlayerRef.current.playChunk(res.audio);
+        audioPlayerRef.current.finishStreaming();
+      } else {
+        setStatus('idle');
       }
+
     } catch (e) {
       console.error("Text Send Error", e);
       alert("Failed to send message");
-    } finally {
-      if (!isPlayingRef.current && audioQueue.current.length === 0) setStatus('idle');
+      setStatus('idle');
     }
   }
 

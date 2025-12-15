@@ -47,5 +47,5 @@
     }
   },
   "llm_name": "LLM",
-  "google_credentials_path": "C:/Users/Willo/Documents/projects/SpanishTutor/google_credentials.json"
+  "google_credentials_path": "google_credentials.json"
 }
