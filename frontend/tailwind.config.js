@@ -7,10 +7,15 @@ export default {
     theme: {
         extend: {
             colors: {
-                primary: "#6366f1", // Indigo 500
-                secondary: "#ec4899", // Pink 500
-                background: "#0f172a", // Slate 900
-                surface: "#1e293b", // Slate 800
+                primary: "#d97757", // Warm terracotta accent
+                secondary: "#e0e0e0", // Soft white text
+                background: "#211f1f", // Warm dark charcoal
+                surface: "#2f2d2d", // Slightly lighter warm dark
+                subtle: "#8e8b8b", // Muted text
+            },
+            fontFamily: {
+                serif: ['"EB Garamond"', 'serif'],
+                sans: ['"Inter"', 'sans-serif'],
             }
         },
     },

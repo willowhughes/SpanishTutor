@@ -100,19 +100,56 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-white font-sans antialiased overflow-hidden">
-      <header className="px-6 py-4 border-b border-white/5 flex justify-between items-center backdrop-blur-md sticky top-0 z-20 bg-background/80">
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${status === 'idle' ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></div>
-          <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-tight">Antigravity Tutor</h1>
+    <div className="flex flex-col h-screen bg-background text-secondary font-sans antialiased overflow-hidden">
+
+      {/* Centered Area */}
+      <div className="flex-1 flex flex-col items-center w-full max-w-3xl mx-auto relative">
+
+        {messages.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-8 z-0 pointer-events-none select-none">
+            <div className="bg-surface/50 rounded-full px-4 py-1.5 mb-6 text-sm text-subtle border border-white/5 shadow-sm backdrop-blur-sm">
+              Spanish Tutor AI
+            </div>
+            <h1 className="text-5xl font-serif text-secondary mb-4 tracking-tight text-center">
+              Hola, Willow
+            </h1>
+            <p className="text-subtle text-lg font-light text-center max-w-md">
+              Ready to practice your Spanish?
+            </p>
+          </div>
+        )}
+
+        {/* Chat Area */}
+        <div className={`flex-1 w-full px-4 overflow-y-auto no-scrollbar z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}>
+          <div className="h-20"></div> {/* Top Spacer */}
+          <ChatInterface messages={messages} status={status} />
+          <div className="h-4"></div>
         </div>
-      </header>
 
-      <ChatInterface messages={messages} status={status} />
+        {/* Input Area */}
+        {/* Input Area */}
+        <div className="w-full px-4 pb-12 z-20 flex flex-col items-center gap-6">
 
-      <div className="w-full bg-background/95 backdrop-blur border-t border-white/5 pb-safe">
-        <MessageInput onSend={handleText} disabled={status !== 'idle'} />
-        <AudioRecorder onRecordingComplete={handleAudio} disabled={status !== 'idle'} />
+          {/* Main Voice Interaction */}
+          <div className="relative">
+            <AudioRecorder onRecordingComplete={handleAudio} disabled={status !== 'idle'} />
+          </div>
+
+          {/* Secondary Text Input */}
+          <div className="w-full max-w-lg opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
+            <div className="bg-surface/50 rounded-full px-1 backdrop-blur-sm">
+              <MessageInput onSend={handleText} disabled={status !== 'idle'} />
+            </div>
+          </div>
+
+          {/* Progress Bar for processing (floating top) */}
+          {status === 'processing' && (
+            <div className="fixed top-0 left-0 w-full h-1 bg-primary/20 z-50">
+              <div className="h-full bg-primary animate-progress"></div>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

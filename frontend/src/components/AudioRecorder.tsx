@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Mic } from 'lucide-react';
 
 interface Props {
@@ -28,8 +27,7 @@ export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }
 
             mediaRecorder.onstop = () => {
                 const duration = (Date.now() - startTimeRef.current) / 1000;
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' }); // Use webm for browser compatibility, backend handles wav conv if needed or we convert here. 
-                // Note via backend we might need wav. But let's send webm/wav as browser supports.
+                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
                 onRecordingComplete(blob, duration);
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -38,7 +36,7 @@ export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }
             setIsRecording(true);
         } catch (err) {
             console.error("Error accessing microphone:", err);
-            alert("Could not access microphone"); // Simple fallback
+            alert("Could not access microphone");
         }
     };
 
@@ -50,34 +48,32 @@ export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }
     };
 
     return (
-        <div className="flex justify-center items-center w-full pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent sticky bottom-0 z-10">
-            <motion.button
-                whileTap={{ scale: 0.95 }}
+        <div className="flex justify-center items-center relative">
+            <button
                 onMouseDown={startRecording}
                 onMouseUp={stopRecording}
                 onMouseLeave={stopRecording}
                 onTouchStart={startRecording}
                 onTouchEnd={stopRecording}
                 disabled={disabled}
-                className={`relative w-20 h-20 rounded-full flex items-center justify-center shadow-xl transition-all duration-300 ${disabled ? 'bg-slate-700 opacity-50 cursor-not-allowed' :
-                    isRecording ? 'bg-red-500 shadow-red-500/50' : 'bg-primary shadow-primary/50 hover:bg-indigo-600'
-                    }`}
+                className={`
+                    w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl relative z-10
+                    ${isRecording
+                        ? 'bg-red-500 shadow-red-500/50'
+                        : 'bg-primary shadow-primary/40 hover:bg-primary/90'
+                    }
+                    ${disabled ? 'opacity-50 cursor-not-allowed grayscale' : 'cursor-pointer'}
+                `}
+                title="Hold to record"
             >
-                <AnimatePresence>
-                    {isRecording && (
-                        <motion.div
-                            initial={{ scale: 1, opacity: 0.5 }}
-                            animate={{ scale: 2, opacity: 0 }}
-                            exit={{ scale: 1, opacity: 0 }}
-                            transition={{ repeat: Infinity, duration: 1.5 }}
-                            className="absolute inset-0 rounded-full bg-red-500"
-                        />
-                    )}
-                </AnimatePresence>
-                <Mic className={`w-8 h-8 text-white ${isRecording ? 'animate-pulse' : ''}`} />
-            </motion.button>
-            <div className="absolute bottom-2 text-slate-400 text-xs font-medium">
-                {isRecording ? "Release to Send" : "Hold to Talk"}
+                <div className={`
+                    absolute rounded-full bg-white/20 transition-all duration-300
+                    ${isRecording ? 'w-24 h-24 opacity-20' : 'w-0 h-0 opacity-0'}
+                `}></div>
+                <Mic className="w-8 h-8 text-white" />
+            </button>
+            <div className={`absolute -bottom-10 text-sm font-medium transition-opacity duration-300 whitespace-nowrap ${isRecording ? 'opacity-100 text-red-500' : 'opacity-0 text-subtle'}`}>
+                {isRecording ? "Recording..." : "Hold to Talk"}
             </div>
         </div>
     );
