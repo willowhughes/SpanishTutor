@@ -1,9 +1,16 @@
-reqs
+reqs:
+- frontend:
+- cd frontend
+- npm install
+- npm run build
+
+- backend:
 - python -m venv venv
 - venv\Scripts\activate
 - pip install -r requirements.txt
     - addtional reqs:
     - C++ build tools 
+- python web_main.py
 
 
 TODO:
