@@ -3,19 +3,35 @@ import { Mic } from 'lucide-react';
 
 interface Props {
     onRecordingComplete: (audioBlob: Blob, duration: number) => void;
+    onRecordingStart?: () => void;
     disabled?: boolean;
 }
 
-export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }) => {
+export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, onRecordingStart, disabled }) => {
     const [isRecording, setIsRecording] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const startTimeRef = useRef<number>(0);
+    const isPreparingRef = useRef<boolean>(false);
+    const shouldStopImmediatelyRef = useRef<boolean>(false);
 
     const startRecording = async () => {
         if (disabled) return;
+        if (onRecordingStart) onRecordingStart();
+
+        isPreparingRef.current = true;
+        shouldStopImmediatelyRef.current = false;
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Check if we were told to stop while getting the stream
+            if (shouldStopImmediatelyRef.current) {
+                stream.getTracks().forEach(track => track.stop());
+                isPreparingRef.current = false;
+                return;
+            }
+
             const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
             chunksRef.current = [];
@@ -34,13 +50,20 @@ export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }
 
             mediaRecorder.start();
             setIsRecording(true);
+            isPreparingRef.current = false;
         } catch (err) {
             console.error("Error accessing microphone:", err);
+            isPreparingRef.current = false;
             alert("Could not access microphone");
         }
     };
 
     const stopRecording = () => {
+        if (isPreparingRef.current) {
+            shouldStopImmediatelyRef.current = true;
+            return;
+        }
+
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             setIsRecording(false);

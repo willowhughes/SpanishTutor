@@ -12,18 +12,45 @@ function App() {
   // Use a ref to keep the player instance stable across renders
   const audioPlayerRef = useRef<AudioStreamPlayer>(new AudioStreamPlayer());
 
+  // Track the current response ID to handle interruptions and ignore stale chunks
+  const responseIdRef = useRef<number>(0);
+
   const handleAudio = async (blob: Blob, duration: number) => {
+    // Ignore empty or extremely short/invalid recordings
+    if (blob.size < 100) {
+      console.log("Ignored audio blob: too small", blob.size);
+      // Ensure status gets reset if we were stuck in processing from the start event
+      if (status === 'processing') setStatus('idle');
+      return;
+    }
+
     setStatus('processing');
+
+    // Generate new response ID for this interaction
+    const currentResponseId = Date.now();
+    responseIdRef.current = currentResponseId;
+
+    // specific stop call just in case
+    audioPlayerRef.current.stop();
 
     // Initialize audio context on user interaction (recording start/end is a safe place)
     await audioPlayerRef.current.initialize();
 
     // Setup playback completion callback
     audioPlayerRef.current.onPlaybackComplete = () => {
-      setStatus('idle');
+      // Only update status if this is still the active response
+      if (responseIdRef.current === currentResponseId) {
+        setStatus('idle');
+      }
     };
 
     await streamAudio(blob, duration, async (data) => {
+      // IGNORE chunks if we have moved on to a new response
+      if (responseIdRef.current !== currentResponseId) {
+        console.log("Ignoring stale chunk from previous response");
+        return;
+      }
+
       if (data.type === 'text') {
         setMessages(prev => [
           ...prev,
@@ -61,6 +88,13 @@ function App() {
   };
 
   const handleText = async (text: string) => {
+    // Generate new response ID
+    const currentResponseId = Date.now();
+    responseIdRef.current = currentResponseId;
+
+    // Stop any current audio immediately
+    audioPlayerRef.current.stop();
+
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }]);
     setStatus('processing');
 
@@ -83,13 +117,18 @@ function App() {
         // The previous code implies backend sends LINEAR16 always.
         // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
 
+        // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
+        if (responseIdRef.current !== currentResponseId) return;
+
         await audioPlayerRef.current.initialize();
         setStatus('playing');
-        audioPlayerRef.current.onPlaybackComplete = () => setStatus('idle');
+        audioPlayerRef.current.onPlaybackComplete = () => {
+          if (responseIdRef.current === currentResponseId) setStatus('idle');
+        };
         await audioPlayerRef.current.playChunk(res.audio);
         audioPlayerRef.current.finishStreaming();
       } else {
-        setStatus('idle');
+        if (responseIdRef.current === currentResponseId) setStatus('idle');
       }
 
     } catch (e) {
@@ -132,13 +171,22 @@ function App() {
 
           {/* Main Voice Interaction */}
           <div className="relative">
-            <AudioRecorder onRecordingComplete={handleAudio} disabled={status !== 'idle'} />
+            <AudioRecorder
+              onRecordingComplete={handleAudio}
+              onRecordingStart={() => {
+                // Stop audio immediately when recording starts (button press)
+                audioPlayerRef.current.stop();
+                // Invalidate current response so any pending chunks are ignored
+                responseIdRef.current = Date.now();
+              }}
+              disabled={status === 'processing'}
+            />
           </div>
 
           {/* Secondary Text Input */}
           <div className="w-full max-w-lg opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
             <div className="bg-surface/50 rounded-full px-1 backdrop-blur-sm">
-              <MessageInput onSend={handleText} disabled={status !== 'idle'} />
+              <MessageInput onSend={handleText} disabled={status === 'processing'} />
             </div>
           </div>
 
