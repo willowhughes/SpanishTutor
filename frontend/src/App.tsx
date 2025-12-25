@@ -5,12 +5,18 @@ import { MessageInput } from './components/MessageInput';
 import type { Message } from './types';
 import { AudioStreamPlayer } from './services/AudioStreamPlayer';
 import { streamAudio, sendText } from './services/api';
+import { useEffect } from 'react';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing' | 'playing'>('idle');
   // Use a ref to keep the player instance stable across renders
   const audioPlayerRef = useRef<AudioStreamPlayer>(new AudioStreamPlayer());
+
+  // Ref for the scrollable container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Track if we should auto-scroll (stick to bottom)
+  const shouldAutoScrollRef = useRef<boolean>(true);
 
   // Track the current response ID to handle interruptions and ignore stale chunks
   const responseIdRef = useRef<number>(0);
@@ -157,11 +163,37 @@ function App() {
     }
   }
 
+  // Effect to handle auto-scrolling
+  useEffect(() => {
+    // Always scroll on new message start (length change implies new message added)
+    // OR if we are currently "sticky"
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    if (shouldAutoScrollRef.current) {
+      // Use smooth scroll for better UX, but instant is more reliable for keeping up with stream
+      // 'smooth' can sometimes lag behind rapid stream updates
+      container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+    }
+  }, [messages, status]); // Re-run when content grows
+
+  // Specific effect to force scroll when a NEW user message is added (to ensure we see it)
+  // We can track message count
+  const prevMsgCountRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      // New message added -> Force scroll to bottom and re-enable stickiness
+      shouldAutoScrollRef.current = true;
+      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length]);
+
   return (
     <div className="flex flex-col h-screen bg-background text-secondary font-sans antialiased overflow-hidden">
 
       {/* Centered Area */}
-      <div className="flex-1 flex flex-col items-center w-full max-w-3xl mx-auto relative">
+      <div className="flex-1 min-h-0 flex flex-col items-center w-full max-w-3xl mx-auto relative">
 
         {messages.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 z-0 pointer-events-none select-none">
@@ -178,7 +210,20 @@ function App() {
         )}
 
         {/* Chat Area */}
-        <div className={`flex-1 w-full px-4 overflow-y-auto no-scrollbar z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}>
+        <div
+          ref={scrollContainerRef}
+          className={`flex-1 min-h-0 w-full px-4 overflow-y-auto no-scrollbar z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}
+          onScroll={() => {
+            // Determine if user has scrolled away from bottom
+            const container = scrollContainerRef.current;
+            if (!container) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            // If within 50px of bottom, sticky mode is ON. Otherwise OFF.
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+            shouldAutoScrollRef.current = distanceFromBottom < 50;
+          }}
+        >
           <div className="h-20"></div> {/* Top Spacer */}
           <ChatInterface messages={messages} status={status} />
           <div className="h-4"></div>
