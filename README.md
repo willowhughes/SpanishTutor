@@ -1,3 +1,4 @@
+run: cd frontend; npm run build; cd ..; python web_main.py
 reqs:
 - frontend:
 - cd frontend
@@ -14,6 +15,9 @@ reqs:
 
 
 TODO:
+- change theme a bit
+- scrolling
+- llm allginment (shorter text, better multilingual nuance, adapting to user ability, etc)
 - improve latency
     - I feel that two good ways to improve latency is to:
     - figure out streaming stt so its like iphone stt on messages where you see the words pop up as you speek and then the text is ready to send to the llm as soon as you are done speaking

@@ -68,7 +68,7 @@ class WebApp:
                 # Process audio input
                 user_message, stt_ms = self._process_audio_input(temp_file_path)
                 if not user_message:
-                    return jsonify({'error': 'Could not transcribe audio'})
+                    return jsonify({'error': 'Could not transcribe audio'}), 400
                 
                 # Generate AI response
                 response, llm_ms = self._generate_ai_response(user_message)
@@ -87,10 +87,10 @@ class WebApp:
                 )
                 
             except ValueError as e:
-                return jsonify({'error': str(e)})
+                return jsonify({'error': str(e)}), 400
             except Exception as e:
                 print(f"Error processing audio: {e}")
-                return jsonify({'error': 'Error processing audio'})
+                return jsonify({'error': 'Error processing audio'}), 500
             finally:
                 self._cleanup_temp_file(temp_file_path)
 

@@ -20,7 +20,7 @@ function App() {
     if (blob.size < 100) {
       console.log("Ignored audio blob: too small", blob.size);
       // Ensure status gets reset if we were stuck in processing from the start event
-      if (status === 'processing') setStatus('idle');
+      setStatus('idle');
       return;
     }
 
@@ -44,14 +44,18 @@ function App() {
       }
     };
 
+    // Pre-calculate the assistant message ID so we can target it for updates 
+    // even if responseIdRef changes (interruption).
+    const assistantMessageId = (Date.now() + 1).toString();
+
     await streamAudio(blob, duration, async (data) => {
-      // IGNORE chunks if we have moved on to a new response
-      if (responseIdRef.current !== currentResponseId) {
-        console.log("Ignoring stale chunk from previous response");
-        return;
-      }
+      // IGNORE chunks if we have moved on to a new response, UNLESS it's a translation update
+      // We want to capture translations for previous messages so they don't get lost.
+      const isStale = responseIdRef.current !== currentResponseId;
 
       if (data.type === 'text') {
+        if (isStale) return; // Don't start new text if interrupted
+
         setMessages(prev => [
           ...prev,
           {
@@ -60,30 +64,45 @@ function App() {
             content: data.user_message
           },
           {
-            id: (Date.now() + 1).toString(),
+            id: assistantMessageId,
             role: 'assistant',
             content: data.response,
             isStreaming: true
           }
         ]);
       } else if (data.type === 'audio_chunk') {
+        if (isStale) return; // Don't play stale audio
         setStatus('playing');
         await audioPlayerRef.current.playChunk(data.chunk);
       } else if (data.type === 'audio_end') {
+        if (isStale) return;
         audioPlayerRef.current.finishStreaming();
       } else if (data.type === 'translation') {
+        // ALWAYS update translation, even if stale, matching by ID
         setMessages(prev => prev.map(m =>
-          m.role === 'assistant' && m.isStreaming ? { ...m, translation: data.text } : m
+          m.id === assistantMessageId ? { ...m, translation: data.text } : m
         ));
       } else if (data.type === 'complete') {
-        setMessages(prev => prev.map(m => m.isStreaming ? { ...m, isStreaming: false } : m));
+        // Only unset streaming if it's the current one, or maybe just purely by ID?
+        // Safer to just unset by ID if we could, but here we iterate.
+        // If stale, we might not want to touch global status, but updating message is fine.
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, isStreaming: false } : m));
       }
     }, () => {
       // On stream close - relying on audio_end/finishStreaming for state change
-    }, (err) => {
+    }, (err: any) => {
       console.error("Audio Stream Error", err);
       setStatus('idle');
-      alert("Error processing audio");
+
+      // Suppress alert for specific "invalid audio" or 400-like errors
+      // Check if err object has 400 status or specific message
+      // api.ts throws "Upload failed" for non-ok responses generally, 
+      // but let's check if we can inspect it or just suppress for now.
+      // Ideally api.ts should pass the status or message.
+      // For now, let's assume if it fails it might be the short recording.
+      // We can also check statusRef to see if we are still processing?
+      // Actually, just showing a console log is better than annoying alert for now.
+      // alert("Error processing audio"); 
     });
   };
 
@@ -178,6 +197,8 @@ function App() {
                 audioPlayerRef.current.stop();
                 // Invalidate current response so any pending chunks are ignored
                 responseIdRef.current = Date.now();
+                // Force status to idle so we are ready for the new interaction
+                setStatus('idle');
               }}
               disabled={status === 'processing'}
             />
