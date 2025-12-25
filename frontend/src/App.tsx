@@ -212,7 +212,7 @@ function App() {
         {/* Chat Area */}
         <div
           ref={scrollContainerRef}
-          className={`flex-1 min-h-0 w-full px-4 overflow-y-auto no-scrollbar z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}
+          className={`flex-1 min-h-0 w-full px-4 overflow-y-auto z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}
           onScroll={() => {
             // Determine if user has scrolled away from bottom
             const container = scrollContainerRef.current;
