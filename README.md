@@ -1,3 +1,8 @@
+
+# SpanishTutor
+![Project Banner](./assets/AppArchitecture.png)
+
+
 run: cd frontend; npm run build; cd ..; python web_main.py
 reqs:
 - frontend:
