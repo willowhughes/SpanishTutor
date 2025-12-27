@@ -16,5 +16,5 @@ audio/
 # Testing files
 tests/
 
-# Agent Reference
-AGENT_REFERENCE.md
+# 
+DEPLOYMENT_STRATEGY.md
