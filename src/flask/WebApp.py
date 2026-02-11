@@ -8,14 +8,15 @@ from src.Utils import Utils
 
 class WebApp:
     def __init__(self, conversation):
-        # tell Flask where to find templates and static files
+        # tell Flask to serve the React build (frontend/dist)
         current_dir = os.path.dirname(__file__)
-        template_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates'))
-        static_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'templates', 'static'))
+        project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
+        dist_dir = os.path.join(project_root, 'frontend', 'dist')
+        
         self.app = Flask(__name__, 
-                         template_folder=template_dir,
-                         static_folder=static_dir,
-                         static_url_path='/static')
+                         template_folder=dist_dir,
+                         static_folder=os.path.join(dist_dir, 'assets'),
+                         static_url_path='/assets')
         self.conversation = conversation
         self.setup_routes()
 
@@ -67,7 +68,7 @@ class WebApp:
                 # Process audio input
                 user_message, stt_ms = self._process_audio_input(temp_file_path)
                 if not user_message:
-                    return jsonify({'error': 'Could not transcribe audio'})
+                    return jsonify({'error': 'Could not transcribe audio'}), 400
                 
                 # Generate AI response
                 response, llm_ms = self._generate_ai_response(user_message)
@@ -86,10 +87,10 @@ class WebApp:
                 )
                 
             except ValueError as e:
-                return jsonify({'error': str(e)})
+                return jsonify({'error': str(e)}), 400
             except Exception as e:
                 print(f"Error processing audio: {e}")
-                return jsonify({'error': 'Error processing audio'})
+                return jsonify({'error': 'Error processing audio'}), 500
             finally:
                 self._cleanup_temp_file(temp_file_path)
 

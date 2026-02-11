@@ -21,3 +21,6 @@ frontend/node_modules/
 
 # voicesamples
 voicesamples/
+
+# 
+DEPLOYMENT_STRATEGY.md
