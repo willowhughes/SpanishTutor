@@ -38,6 +38,7 @@ export class AudioStreamPlayer {
     private streamingComplete: boolean;
     public onPlaybackComplete: (() => void) | null;
     private activeSources: AudioBufferSourceNode[];
+    private currentSessionId: string;
 
     constructor() {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -47,20 +48,47 @@ export class AudioStreamPlayer {
         this.streamingComplete = false;
         this.onPlaybackComplete = null;
         this.activeSources = [];
+        this.currentSessionId = '';
     }
 
-    async initialize() {
+    async resumeContext() {
         if (this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
         }
+    }
+
+    async startSession(): Promise<string> {
+        await this.resumeContext();
+
+        // Stop previous session audio
+        this.stop();
+
+        // Generate new session ID
+        this.currentSessionId = Date.now().toString() + Math.random().toString().slice(2);
+
+        // Reset state
         this.nextPlayTime = this.audioContext.currentTime;
         this.isFirstChunk = true;
         this.streamingComplete = false;
+        this.onPlaybackComplete = null;
+
+        return this.currentSessionId;
     }
 
-    async playChunk(base64Chunk: string) {
+    // Deprecated/Internal use mainly, but logic moved to startSession
+    private async initialize() {
+        // Kept for compatibility if needed, but startSession is preferred
+        return this.startSession();
+    }
+
+    async playChunk(base64Chunk: string, sessionId: string) {
+        // if (sessionId !== this.currentSessionId) return;
+
         try {
             const floatData = AudioUtils.base64ToPCM(base64Chunk);
+            // Re-check session after decode
+            // if (sessionId !== this.currentSessionId) return;
+
 
             const audioBufferNode = this.audioContext.createBuffer(1, floatData.length, this.sampleRate);
             audioBufferNode.getChannelData(0).set(floatData);
@@ -95,7 +123,9 @@ export class AudioStreamPlayer {
         }
     }
 
-    finishStreaming() {
+    finishStreaming(sessionId: string) {
+        if (sessionId !== this.currentSessionId) return;
+
         console.log('All audio chunks received');
         this.streamingComplete = true;
         this.checkIfPlaybackComplete();
@@ -123,4 +153,5 @@ export class AudioStreamPlayer {
         });
         this.activeSources = [];
     }
+
 }

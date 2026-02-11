@@ -15,8 +15,8 @@ function App() {
   const handleAudio = async (blob: Blob, duration: number) => {
     setStatus('processing');
 
-    // Initialize audio context on user interaction (recording start/end is a safe place)
-    await audioPlayerRef.current.initialize();
+    // Initialize new session
+    const sessionId = await audioPlayerRef.current.startSession();
 
     // Setup playback completion callback
     audioPlayerRef.current.onPlaybackComplete = () => {
@@ -41,9 +41,11 @@ function App() {
         ]);
       } else if (data.type === 'audio_chunk') {
         setStatus('playing');
-        await audioPlayerRef.current.playChunk(data.chunk);
+      } else if (data.type === 'audio_chunk') {
+        setStatus('playing');
+        await audioPlayerRef.current.playChunk(data.chunk, sessionId);
       } else if (data.type === 'audio_end') {
-        audioPlayerRef.current.finishStreaming();
+        audioPlayerRef.current.finishStreaming(sessionId);
       } else if (data.type === 'translation') {
         setMessages(prev => prev.map(m =>
           m.role === 'assistant' && m.isStreaming ? { ...m, translation: data.text } : m
@@ -83,11 +85,11 @@ function App() {
         // The previous code implies backend sends LINEAR16 always.
         // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
 
-        await audioPlayerRef.current.initialize();
+        const sessionId = await audioPlayerRef.current.startSession();
         setStatus('playing');
         audioPlayerRef.current.onPlaybackComplete = () => setStatus('idle');
-        await audioPlayerRef.current.playChunk(res.audio);
-        audioPlayerRef.current.finishStreaming();
+        await audioPlayerRef.current.playChunk(res.audio, sessionId);
+        audioPlayerRef.current.finishStreaming(sessionId);
       } else {
         setStatus('idle');
       }
@@ -98,6 +100,16 @@ function App() {
       setStatus('idle');
     }
   }
+
+  const handleStartRecording = () => {
+    // Ensure context is resumed on user gesture
+    audioPlayerRef.current.resumeContext();
+
+    if (status === 'playing' || status === 'processing') {
+      // Interrupt playback and invalidate running streams
+      audioPlayerRef.current.startSession();
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen bg-background text-secondary font-sans antialiased overflow-hidden">
@@ -130,9 +142,14 @@ function App() {
         {/* Input Area */}
         <div className="w-full px-4 pb-12 z-20 flex flex-col items-center gap-6">
 
+
           {/* Main Voice Interaction */}
           <div className="relative">
-            <AudioRecorder onRecordingComplete={handleAudio} disabled={status !== 'idle'} />
+            <AudioRecorder
+              onRecordingComplete={handleAudio}
+              onStartRecording={handleStartRecording}
+              disabled={status === 'processing' && messages[messages.length - 1]?.role !== 'assistant'}
+            />
           </div>
 
           {/* Secondary Text Input */}

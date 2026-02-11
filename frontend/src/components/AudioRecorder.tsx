@@ -3,10 +3,11 @@ import { Mic } from 'lucide-react';
 
 interface Props {
     onRecordingComplete: (audioBlob: Blob, duration: number) => void;
+    onStartRecording?: () => void;
     disabled?: boolean;
 }
 
-export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }) => {
+export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, onStartRecording, disabled }) => {
     const [isRecording, setIsRecording] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -14,6 +15,7 @@ export const AudioRecorder: React.FC<Props> = ({ onRecordingComplete, disabled }
 
     const startRecording = async () => {
         if (disabled) return;
+        onStartRecording?.();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
