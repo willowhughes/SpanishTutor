@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { MessageBubble } from './MessageBubble';
 import type { Message } from '../types';
 
@@ -8,14 +8,10 @@ interface Props {
 }
 
 export const ChatInterface: React.FC<Props> = ({ messages, status }) => {
-    const bottomRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, status]);
+    // Scroll logic moved to App.tsx for smart stickiness
 
     return (
-        <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 overflow-y-auto no-scrollbar">
+        <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
             <div className="flex flex-col gap-6">
                 {messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} />
@@ -27,7 +23,7 @@ export const ChatInterface: React.FC<Props> = ({ messages, status }) => {
                     </div>
                 )}
 
-                <div ref={bottomRef} className="h-4" />
+                <div className="h-4" />
             </div>
         </div>
     );

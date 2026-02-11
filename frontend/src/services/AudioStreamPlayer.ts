@@ -152,6 +152,14 @@ export class AudioStreamPlayer {
             }
         });
         this.activeSources = [];
+        this.streamingComplete = false;
+        this.isFirstChunk = true;
+        this.nextPlayTime = 0; // Reset timing to avoid delays on next play
+
+        // Cancel any pending playback completion callback
+        // (Note: The existing implementation uses setTimeout in checkIfPlaybackComplete. 
+        // Ideally we should clear that timeout if we tracked it, but resetting streamingComplete 
+        // prevents new callbacks from firing logic if we check it inside the callback.)
     }
 
 }

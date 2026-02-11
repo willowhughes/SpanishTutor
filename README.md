@@ -1,12 +1,28 @@
-reqs
+
+# SpanishTutor
+![Project Banner](./assets/AppArchitecture.png)
+
+
+run: cd frontend; npm run build; cd ..; python web_main.py
+reqs:
+- frontend:
+- cd frontend
+- npm install
+- npm run build
+
+- backend:
 - python -m venv venv
 - venv\Scripts\activate
 - pip install -r requirements.txt
     - addtional reqs:
     - C++ build tools 
+- python web_main.py
 
 
 TODO:
+- change theme a bit
+- scrolling
+- llm allginment (shorter text, better multilingual nuance, adapting to user ability, etc)
 - improve latency
     - I feel that two good ways to improve latency is to:
     - figure out streaming stt so its like iphone stt on messages where you see the words pop up as you speek and then the text is ready to send to the llm as soon as you are done speaking

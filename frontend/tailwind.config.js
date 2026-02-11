@@ -7,7 +7,7 @@ export default {
     theme: {
         extend: {
             colors: {
-                primary: "#d97757", // Warm terracotta accent
+                primary: "#E57373", // Soft Red (was warm terracotta #d97757)
                 secondary: "#e0e0e0", // Soft white text
                 background: "#211f1f", // Warm dark charcoal
                 surface: "#2f2d2d", // Slightly lighter warm dark

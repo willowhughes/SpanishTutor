@@ -5,6 +5,7 @@ import { MessageInput } from './components/MessageInput';
 import type { Message } from './types';
 import { AudioStreamPlayer } from './services/AudioStreamPlayer';
 import { streamAudio, sendText } from './services/api';
+import { useEffect } from 'react';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -12,19 +13,55 @@ function App() {
   // Use a ref to keep the player instance stable across renders
   const audioPlayerRef = useRef<AudioStreamPlayer>(new AudioStreamPlayer());
 
+  // Ref for the scrollable container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Track if we should auto-scroll (stick to bottom)
+  const shouldAutoScrollRef = useRef<boolean>(true);
+
+  // Track the current response ID to handle interruptions and ignore stale chunks
+  const responseIdRef = useRef<number>(0);
+
   const handleAudio = async (blob: Blob, duration: number) => {
+    // Ignore empty or extremely short/invalid recordings
+    if (blob.size < 100) {
+      console.log("Ignored audio blob: too small", blob.size);
+      // Ensure status gets reset if we were stuck in processing from the start event
+      setStatus('idle');
+      return;
+    }
+
     setStatus('processing');
 
-    // Initialize new session
-    const sessionId = await audioPlayerRef.current.startSession();
+    // Generate new response ID for this interaction
+    const currentResponseId = Date.now();
+    responseIdRef.current = currentResponseId;
+
+    // specific stop call just in case
+    audioPlayerRef.current.stop();
+
+    // Initialize audio context on user interaction (recording start/end is a safe place)
+    await audioPlayerRef.current.initialize();
 
     // Setup playback completion callback
     audioPlayerRef.current.onPlaybackComplete = () => {
-      setStatus('idle');
+      // Only update status if this is still the active response
+      if (responseIdRef.current === currentResponseId) {
+        setStatus('idle');
+      }
     };
 
+    // Pre-calculate the assistant message ID so we can target it for updates 
+    // even if responseIdRef changes (interruption).
+    const assistantMessageId = (Date.now() + 1).toString();
+
     await streamAudio(blob, duration, async (data) => {
+      // IGNORE chunks if we have moved on to a new response, UNLESS it's a translation update
+      // We want to capture translations for previous messages so they don't get lost.
+      const isStale = responseIdRef.current !== currentResponseId;
+
       if (data.type === 'text') {
+        if (isStale) return; // Don't start new text if interrupted
+
         setMessages(prev => [
           ...prev,
           {
@@ -33,36 +70,58 @@ function App() {
             content: data.user_message
           },
           {
-            id: (Date.now() + 1).toString(),
+            id: assistantMessageId,
             role: 'assistant',
             content: data.response,
             isStreaming: true
           }
         ]);
       } else if (data.type === 'audio_chunk') {
+        if (isStale) return; // Don't play stale audio
         setStatus('playing');
       } else if (data.type === 'audio_chunk') {
         setStatus('playing');
         await audioPlayerRef.current.playChunk(data.chunk, sessionId);
       } else if (data.type === 'audio_end') {
-        audioPlayerRef.current.finishStreaming(sessionId);
+        if (isStale) return;
+        audioPlayerRef.current.finishStreaming();
       } else if (data.type === 'translation') {
+        // ALWAYS update translation, even if stale, matching by ID
         setMessages(prev => prev.map(m =>
-          m.role === 'assistant' && m.isStreaming ? { ...m, translation: data.text } : m
+          m.id === assistantMessageId ? { ...m, translation: data.text } : m
         ));
       } else if (data.type === 'complete') {
-        setMessages(prev => prev.map(m => m.isStreaming ? { ...m, isStreaming: false } : m));
+        // Only unset streaming if it's the current one, or maybe just purely by ID?
+        // Safer to just unset by ID if we could, but here we iterate.
+        // If stale, we might not want to touch global status, but updating message is fine.
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, isStreaming: false } : m));
       }
     }, () => {
       // On stream close - relying on audio_end/finishStreaming for state change
-    }, (err) => {
+    }, (err: any) => {
       console.error("Audio Stream Error", err);
       setStatus('idle');
-      alert("Error processing audio");
+
+      // Suppress alert for specific "invalid audio" or 400-like errors
+      // Check if err object has 400 status or specific message
+      // api.ts throws "Upload failed" for non-ok responses generally, 
+      // but let's check if we can inspect it or just suppress for now.
+      // Ideally api.ts should pass the status or message.
+      // For now, let's assume if it fails it might be the short recording.
+      // We can also check statusRef to see if we are still processing?
+      // Actually, just showing a console log is better than annoying alert for now.
+      // alert("Error processing audio"); 
     });
   };
 
   const handleText = async (text: string) => {
+    // Generate new response ID
+    const currentResponseId = Date.now();
+    responseIdRef.current = currentResponseId;
+
+    // Stop any current audio immediately
+    audioPlayerRef.current.stop();
+
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }]);
     setStatus('processing');
 
@@ -85,13 +144,18 @@ function App() {
         // The previous code implies backend sends LINEAR16 always.
         // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
 
-        const sessionId = await audioPlayerRef.current.startSession();
+        // Let's assume res.audio is also LINEAR16 if it comes from the same TTS.
+        if (responseIdRef.current !== currentResponseId) return;
+
+        await audioPlayerRef.current.initialize();
         setStatus('playing');
-        audioPlayerRef.current.onPlaybackComplete = () => setStatus('idle');
-        await audioPlayerRef.current.playChunk(res.audio, sessionId);
-        audioPlayerRef.current.finishStreaming(sessionId);
+        audioPlayerRef.current.onPlaybackComplete = () => {
+          if (responseIdRef.current === currentResponseId) setStatus('idle');
+        };
+        await audioPlayerRef.current.playChunk(res.audio);
+        audioPlayerRef.current.finishStreaming();
       } else {
-        setStatus('idle');
+        if (responseIdRef.current === currentResponseId) setStatus('idle');
       }
 
     } catch (e) {
@@ -101,21 +165,37 @@ function App() {
     }
   }
 
-  const handleStartRecording = () => {
-    // Ensure context is resumed on user gesture
-    audioPlayerRef.current.resumeContext();
+  // Effect to handle auto-scrolling
+  useEffect(() => {
+    // Always scroll on new message start (length change implies new message added)
+    // OR if we are currently "sticky"
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-    if (status === 'playing' || status === 'processing') {
-      // Interrupt playback and invalidate running streams
-      audioPlayerRef.current.startSession();
+    if (shouldAutoScrollRef.current) {
+      // Use smooth scroll for better UX, but instant is more reliable for keeping up with stream
+      // 'smooth' can sometimes lag behind rapid stream updates
+      container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
     }
-  };
+  }, [messages, status]); // Re-run when content grows
+
+  // Specific effect to force scroll when a NEW user message is added (to ensure we see it)
+  // We can track message count
+  const prevMsgCountRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      // New message added -> Force scroll to bottom and re-enable stickiness
+      shouldAutoScrollRef.current = true;
+      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length]);
 
   return (
     <div className="flex flex-col h-screen bg-background text-secondary font-sans antialiased overflow-hidden">
 
       {/* Centered Area */}
-      <div className="flex-1 flex flex-col items-center w-full max-w-3xl mx-auto relative">
+      <div className="flex-1 min-h-0 flex flex-col items-center w-full max-w-3xl mx-auto relative">
 
         {messages.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 z-0 pointer-events-none select-none">
@@ -132,7 +212,20 @@ function App() {
         )}
 
         {/* Chat Area */}
-        <div className={`flex-1 w-full px-4 overflow-y-auto no-scrollbar z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}>
+        <div
+          ref={scrollContainerRef}
+          className={`flex-1 min-h-0 w-full px-4 overflow-y-auto z-10 masking-gradient ${messages.length === 0 ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}
+          onScroll={() => {
+            // Determine if user has scrolled away from bottom
+            const container = scrollContainerRef.current;
+            if (!container) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            // If within 50px of bottom, sticky mode is ON. Otherwise OFF.
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+            shouldAutoScrollRef.current = distanceFromBottom < 50;
+          }}
+        >
           <div className="h-20"></div> {/* Top Spacer */}
           <ChatInterface messages={messages} status={status} />
           <div className="h-4"></div>
@@ -147,15 +240,22 @@ function App() {
           <div className="relative">
             <AudioRecorder
               onRecordingComplete={handleAudio}
-              onStartRecording={handleStartRecording}
-              disabled={status === 'processing' && messages[messages.length - 1]?.role !== 'assistant'}
+              onRecordingStart={() => {
+                // Stop audio immediately when recording starts (button press)
+                audioPlayerRef.current.stop();
+                // Invalidate current response so any pending chunks are ignored
+                responseIdRef.current = Date.now();
+                // Force status to idle so we are ready for the new interaction
+                setStatus('idle');
+              }}
+              disabled={status === 'processing'}
             />
           </div>
 
           {/* Secondary Text Input */}
           <div className="w-full max-w-lg opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
             <div className="bg-surface/50 rounded-full px-1 backdrop-blur-sm">
-              <MessageInput onSend={handleText} disabled={status !== 'idle'} />
+              <MessageInput onSend={handleText} disabled={status === 'processing'} />
             </div>
           </div>
 
